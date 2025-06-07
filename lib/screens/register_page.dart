@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iris_application/services/auth_services.dart';
 import 'home_page.dart';
+import 'package:iris_application/main.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -182,6 +183,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                         MaterialPageRoute(
                                           builder:
                                               (context) => HomePage(
+                                                cameras: cameras,
                                                 email: _emailController.text,
                                                 username:
                                                     _usernameController.text,

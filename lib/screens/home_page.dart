@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'login_page.dart';
+import 'text_detection_page.dart';
+import 'package:camera/camera.dart';
 
 class Reminder {
   final String type;
@@ -28,7 +30,14 @@ class Reminder {
 class HomePage extends StatefulWidget {
   final String email;
   final String? username;
-  const HomePage({super.key, required this.email, this.username});
+  final List<CameraDescription> cameras; // Move cameras to constructor parameters
+
+  const HomePage({
+    super.key, 
+    required this.email, 
+    this.username,
+    required this.cameras, // Make cameras required
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -228,7 +237,7 @@ class _HomePageState extends State<HomePage> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
-                  "Mr. ${widget.username ?? 'User'}.",
+                  "${widget.username ?? 'User'}.",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 32,
@@ -407,25 +416,48 @@ class _HomePageState extends State<HomePage> {
                                 color: Color(0xFF234462),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.text_snippet,
-                                    color: Colors.white,
-                                    size: 40,
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    "Text\nReader",
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
+                              child: GestureDetector(
+                                onTap: () {
+                                  // Check if cameras are available before navigating
+                                  if (widget.cameras.isNotEmpty) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => TextDetectionApp(
+                                          cameras: widget.cameras,
+                                        ),
+                                      ),
+                                    );
+                                  } else {
+                                    // Show error message if no cameras available
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('No cameras available on this device'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.text_snippet,
                                       color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                                      size: 40,
                                     ),
-                                  ),
-                                ],
+                                    SizedBox(height: 8),
+                                    Text(
+                                      "Text\nReader",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

@@ -7,8 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http; // Untuk membuat permintaan HTTP
 import 'package:image/image.dart' as img;
-import 'dart:typed_data';
-import 'text_detection_page.dart';
 
 // Global cameras list (ensure it's initialized before use)
 List<CameraDescription> cameras = [];

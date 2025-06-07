@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'register_page.dart';
 import 'home_page.dart';
 import 'package:iris_application/services/auth_services.dart';
+import 'package:iris_application/main.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -44,8 +45,8 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
-                    width: 250,
-                    height: 35,
+                    width: 160,
+                    height: 40,
                     child: ElevatedButton(
                       onPressed: () {},
                       style: ElevatedButton.styleFrom(
@@ -60,8 +61,8 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   SizedBox(width: 10),
                   SizedBox(
-                    width: 250,
-                    height: 35,
+                    width: 160,
+                    height: 40,
                     child: OutlinedButton(
                       onPressed: () {
                         Navigator.push(
@@ -158,7 +159,7 @@ class _LoginPageState extends State<LoginPage> {
                                             context,
                                             MaterialPageRoute(
                                               builder:
-                                                  (context) => HomePage(
+                                                  (context) => HomePage(cameras: cameras,
                                                     email:
                                                         _emailController.text,
                                                     username: username,
