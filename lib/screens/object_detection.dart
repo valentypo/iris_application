@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -14,35 +15,81 @@ class ObjectDetection extends StatefulWidget {
   State<ObjectDetection> createState() => _ObjectDetectionState();
 }
 
-class _ObjectDetectionState extends State<ObjectDetection> {
-  late CameraController _cameraController;
-  bool isCameraReady = false;
+class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingObserver {
+  CameraController? _cameraController;
+  Future<void>? _initializeControllerFuture;
+  bool _isCameraInitialized = false;
+  bool _isProcessing = false;
+  
+  CameraDescription? _currentCamera;
+  CameraDescription? _frontCamera;
+  CameraDescription? _backCamera;
+  
   String result = "Initializing...";
-  bool isDetecting = false;
   File? _imageFile;
   List<DetectedObject> _detectedObjects = [];
   Size? _imageSize;
   final ImagePicker _picker = ImagePicker();
+  
+  // Zoom state
+  double _currentZoomLevel = 1.0;
+  double _minZoomLevel = 1.0;
+  double _maxZoomLevel = 1.0;
+  double _baseZoomLevel = 1.0;
+  
+  // Flash state
+  FlashMode _currentFlashMode = FlashMode.off;
+  final List<FlashMode> _flashModes = [
+    FlashMode.off,
+    FlashMode.auto,
+    FlashMode.always
+  ];
+  int _currentFlashModeIndex = 0;
+  
+  // Focus state
+  Offset? _focusPoint;
+  Timer? _focusPointTimer;
+  
+  // Key for the preview container
+  final GlobalKey _previewContainerKey = GlobalKey();
   
   // For draggable sheet
   DraggableScrollableController _dragController = DraggableScrollableController();
   double _initialChildSize = 0.3;
   double _minChildSize = 0.3;
   double _maxChildSize = 0.8;
+  bool _showDraggable = false;
 
   // Change this to your computer's IP address when testing on physical device
   static const String baseUrl = 'http://172.20.10.5:5000';
-  bool _showDraggable = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initializeApp();
   }
 
   Future<void> _initializeApp() async {
     await _checkBackendConnection();
-    await _initializeCamera();
+    if (widget.cameras.isNotEmpty) {
+      _setupCamerasAndInitialize();
+    }
+  }
+
+  void _setupCamerasAndInitialize() {
+    for (var cameraDescription in widget.cameras) {
+      if (cameraDescription.lensDirection == CameraLensDirection.back) {
+        _backCamera = cameraDescription;
+      } else if (cameraDescription.lensDirection == CameraLensDirection.front) {
+        _frontCamera = cameraDescription;
+      }
+    }
+    _currentCamera = _backCamera ?? _frontCamera ?? widget.cameras.first;
+    if (_currentCamera != null) {
+      _initializeCamera(_currentCamera!);
+    }
   }
 
   Future<void> _checkBackendConnection() async {
@@ -72,39 +119,89 @@ class _ObjectDetectionState extends State<ObjectDetection> {
     }
   }
 
-  Future<void> _initializeCamera() async {
-    if (widget.cameras.isEmpty) {
-      setState(() {
-        result = "No cameras available";
-      });
-      return;
+  Future<void> _initializeCamera(CameraDescription cameraDescription) async {
+    if (_cameraController != null) {
+      await _cameraController!.dispose();
     }
+    
+    _cameraController = CameraController(
+      cameraDescription,
+      ResolutionPreset.high,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.jpeg,
+    );
+
+    if (mounted) setState(() => _isCameraInitialized = false);
+    _currentZoomLevel = 1.0;
+
+    _initializeControllerFuture = _cameraController!.initialize();
 
     try {
-      _cameraController = CameraController(
-        widget.cameras[0],
-        ResolutionPreset.high,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
-
-      await _cameraController.initialize();
-
+      await _initializeControllerFuture;
       if (!mounted) return;
-      
+
+      // Fetch zoom levels
+      _minZoomLevel = await _cameraController!.getMinZoomLevel();
+      _maxZoomLevel = await _cameraController!.getMaxZoomLevel();
+
+      // Set initial flash mode
+      await _cameraController!.setFlashMode(_currentFlashMode);
+
       setState(() {
-        isCameraReady = true;
+        _isCameraInitialized = true;
+        _currentCamera = cameraDescription;
         result = "Tap the button to detect objects";
       });
     } catch (e) {
+      print('Error initializing camera: $e');
+      if (!mounted) return;
       setState(() {
+        _isCameraInitialized = false;
         result = "Camera initialization failed: $e";
       });
-      print("Camera error: $e");
     }
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _focusPointTimer?.cancel();
+    _cameraController?.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _dragController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final CameraController? cameraController = _cameraController;
+    if (cameraController == null ||
+        !cameraController.value.isInitialized ||
+        _currentCamera == null) {
+      return;
+    }
+    if (state == AppLifecycleState.inactive) {
+      cameraController.dispose();
+      if (mounted) setState(() => _isCameraInitialized = false);
+    } else if (state == AppLifecycleState.resumed) {
+      if (!_isCameraInitialized) {
+        _initializeCamera(_currentCamera!);
+      }
+    }
+  }
+
+  void _flipCamera() {
+    if (_isProcessing || _frontCamera == null || _backCamera == null) return;
+    final newCamera =
+        (_cameraController!.description.lensDirection == CameraLensDirection.back)
+            ? _frontCamera!
+            : _backCamera!;
+    _initializeCamera(newCamera);
+  }
+
   Future<void> _pickImageFromGallery() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
     try {
       final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
@@ -115,22 +212,35 @@ class _ObjectDetectionState extends State<ObjectDetection> {
       setState(() {
         result = "Failed to pick image: $e";
       });
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
   Future<void> _takePicture() async {
-    if (!isCameraReady || isDetecting) {
+    if (_cameraController == null ||
+        !_cameraController!.value.isInitialized ||
+        _isProcessing ||
+        _cameraController!.value.isTakingPicture) {
       return;
     }
-
+    
+    setState(() => _isProcessing = true);
     try {
-      final XFile picture = await _cameraController.takePicture();
+      // Ensure flash mode is set
+      await _cameraController!.setFlashMode(_currentFlashMode);
+      // Ensure zoom level is set
+      await _cameraController!.setZoomLevel(_currentZoomLevel);
+      
+      final XFile picture = await _cameraController!.takePicture();
       _imageFile = File(picture.path);
       await _processImage();
     } catch (e) {
       setState(() {
         result = "Failed to take picture: $e";
       });
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -138,7 +248,7 @@ class _ObjectDetectionState extends State<ObjectDetection> {
     if (_imageFile == null) return;
 
     setState(() {
-      isDetecting = true;
+      _isProcessing = true;
       result = "Analyzing image...";
       _detectedObjects = [];
       _showDraggable = true;
@@ -213,7 +323,7 @@ class _ObjectDetectionState extends State<ObjectDetection> {
       print("Detection error: $e");
     } finally {
       setState(() {
-        isDetecting = false;
+        _isProcessing = false;
       });
     }
   }
@@ -232,21 +342,131 @@ class _ObjectDetectionState extends State<ObjectDetection> {
     );
   }
 
-  void _goBack() {
-    // Restore system UI before going back
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    Navigator.of(context).pop();
+  // --- Zoom ---
+  void _handleScaleStart(ScaleStartDetails details) {
+    _baseZoomLevel = _currentZoomLevel;
   }
 
-  @override
-  void dispose() {
-    // Restore system UI
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (isCameraReady) {
-      _cameraController.dispose();
+  Future<void> _handleScaleUpdate(ScaleUpdateDetails details) async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    double newZoomLevel =
+        (_baseZoomLevel * details.scale).clamp(_minZoomLevel, _maxZoomLevel);
+    if (newZoomLevel != _currentZoomLevel) {
+      await _cameraController!.setZoomLevel(newZoomLevel);
+      if (mounted) setState(() => _currentZoomLevel = newZoomLevel);
     }
-    _dragController.dispose();
-    super.dispose();
+  }
+
+  // --- Flash ---
+  IconData _getFlashIcon() {
+    switch (_currentFlashMode) {
+      case FlashMode.off:
+        return Icons.flash_off;
+      case FlashMode.auto:
+        return Icons.flash_auto;
+      case FlashMode.always:
+        return Icons.flash_on;
+      case FlashMode.torch:
+        return Icons.highlight;
+      default:
+        return Icons.flash_off;
+    }
+  }
+
+  void _toggleFlashMode() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    _currentFlashModeIndex = (_currentFlashModeIndex + 1) % _flashModes.length;
+    _currentFlashMode = _flashModes[_currentFlashModeIndex];
+    try {
+      await _cameraController!.setFlashMode(_currentFlashMode);
+      if (mounted) setState(() {});
+      print("Flash mode set to: $_currentFlashMode");
+    } catch (e) {
+      print("Error setting flash mode: $e");
+    }
+  }
+
+  // --- Focus ---
+  Future<void> _handleTapToFocus(TapUpDetails details) async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+
+    final RenderBox? previewBox =
+        _previewContainerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (previewBox == null || !previewBox.hasSize) return;
+
+    final Offset localOffset = previewBox.globalToLocal(details.globalPosition);
+
+    final double x = (localOffset.dx / previewBox.size.width).clamp(0.0, 1.0);
+    final double y = (localOffset.dy / previewBox.size.height).clamp(0.0, 1.0);
+    final Offset tapPoint = Offset(x, y);
+
+    try {
+      await _cameraController!.setFocusMode(FocusMode.auto);
+      await _cameraController!.setFocusPoint(tapPoint);
+
+      print("Focus point set to: $tapPoint");
+
+      if (mounted) {
+        setState(() {
+          _focusPoint = localOffset;
+        });
+        _focusPointTimer?.cancel();
+        _focusPointTimer = Timer(const Duration(seconds: 1), () {
+          if (mounted) setState(() => _focusPoint = null);
+        });
+      }
+    } catch (e) {
+      print("Error setting focus point: $e");
+    }
+  }
+
+  Widget _buildCameraPreview(BuildContext context) {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+
+    return ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width,
+            height: MediaQuery.of(context).size.width * _cameraController!.value.aspectRatio,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  key: _previewContainerKey,
+                  onScaleStart: _handleScaleStart,
+                  onScaleUpdate: _handleScaleUpdate,
+                  onTapUp: _handleTapToFocus,
+                  child: CameraPreview(_cameraController!),
+                ),
+                if (_focusPoint != null)
+                  Positioned(
+                    left: _focusPoint!.dx - 30,
+                    top: _focusPoint!.dy - 30,
+                    child: Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.yellow, width: 2),
+                        shape: BoxShape.rectangle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _goBack() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    Navigator.of(context).pop();
   }
 
   @override
@@ -257,19 +477,37 @@ class _ObjectDetectionState extends State<ObjectDetection> {
         children: [
           // Full screen camera preview or image
           Positioned.fill(
-            child: isCameraReady
-                ? (_imageFile != null
-                    ? Image.file(
-                        _imageFile!,
-                        fit: BoxFit.cover,
-                      )
-                    : CameraPreview(_cameraController))
-                : const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
+            child: _imageFile != null
+                ? Image.file(
+                    _imageFile!,
+                    fit: BoxFit.contain,
+                  )
+                : FutureBuilder<void>(
+                    future: _initializeControllerFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.done &&
+                          _isCameraInitialized) {
+                        return _buildCameraPreview(context);
+                      } else if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              "Error loading camera: ${snapshot.error}",
+                              style: const TextStyle(color: Colors.white),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                      return const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      );
+                    },
                   ),
           ),
 
-          // Bounding boxes overlay - Now visible with yellow color
+          // Bounding boxes overlay
           if (_imageFile != null && _detectedObjects.isNotEmpty && _imageSize != null)
             Positioned.fill(
               child: LayoutBuilder(
@@ -290,7 +528,7 @@ class _ObjectDetectionState extends State<ObjectDetection> {
               ),
             ),
 
-          // Top controls - Back button and status
+          // Top controls - Back button and Flash button
           Positioned(
             top: MediaQuery.of(context).padding.top + 20,
             left: 20,
@@ -309,25 +547,59 @@ class _ObjectDetectionState extends State<ObjectDetection> {
                     onPressed: _goBack,
                   ),
                 ),
-                // Status text for camera mode
-                if (_imageFile == null && result.isNotEmpty)
+                // Flash button
+                if (_isCameraInitialized &&
+                    _cameraController != null &&
+                    _cameraController!.value.isInitialized &&
+                    _imageFile == null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(20),
+                      shape: BoxShape.circle,
                     ),
-                    child: Text(
-                      result,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
+                    child: IconButton(
+                      icon: Icon(_getFlashIcon(),
+                          color: Colors.white, size: 24),
+                      onPressed: _isProcessing ? null : _toggleFlashMode,
+                      tooltip: 'Toggle Flash',
+                    ),
+                  ),
+                // Reset button (when image is captured)
+                if (_imageFile != null)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.refresh, size: 24, color: Colors.white),
+                      onPressed: _resetDetection,
                     ),
                   ),
               ],
             ),
           ),
+
+          // Zoom Level Indicator
+          if (_isCameraInitialized && _currentZoomLevel > 1.01 && _imageFile == null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 80,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    "${_currentZoomLevel.toStringAsFixed(1)}x",
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              ),
+            ),
 
           // Bottom controls
           Positioned(
@@ -350,13 +622,13 @@ class _ObjectDetectionState extends State<ObjectDetection> {
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.photo_library, size: 24, color: Colors.white),
-                      onPressed: _pickImageFromGallery,
+                      onPressed: (_isProcessing || !_isCameraInitialized) ? null : _pickImageFromGallery,
                     ),
                   ),
                   const SizedBox(width: 50),
                   // Capture button
                   GestureDetector(
-                    onTap: (isCameraReady && !isDetecting) ? _takePicture : null,
+                    onTap: (_isProcessing || !_isCameraInitialized || _imageFile != null) ? null : _takePicture,
                     child: Container(
                       width: 80,
                       height: 80,
@@ -373,7 +645,7 @@ class _ObjectDetectionState extends State<ObjectDetection> {
                         ],
                       ),
                       child: Center(
-                        child: isDetecting
+                        child: _isProcessing
                             ? const CircularProgressIndicator(
                                 color: Colors.black,
                                 strokeWidth: 3,
@@ -390,8 +662,8 @@ class _ObjectDetectionState extends State<ObjectDetection> {
                     ),
                   ),
                   const SizedBox(width: 50),
-                  // Reset button (appears after detection)
-                  if (_imageFile != null)
+                  // Flip camera button (only show when camera is active)
+                  if (_imageFile == null)
                     Container(
                       width: 60,
                       height: 60,
@@ -401,8 +673,13 @@ class _ObjectDetectionState extends State<ObjectDetection> {
                         border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.refresh, size: 24, color: Colors.white),
-                        onPressed: _resetDetection,
+                        icon: const Icon(Icons.flip_camera_ios_outlined, size: 24, color: Colors.white),
+                        onPressed: (_isProcessing ||
+                                !_isCameraInitialized ||
+                                _frontCamera == null ||
+                                _backCamera == null)
+                            ? null
+                            : _flipCamera,
                       ),
                     )
                   else
@@ -412,7 +689,7 @@ class _ObjectDetectionState extends State<ObjectDetection> {
             ),
           ),
 
-          // Draggable results sheet - Only show when _imageFile is not null
+          // Draggable results sheet
           if (_imageFile != null && _showDraggable)
             DraggableScrollableSheet(
               initialChildSize: _initialChildSize,
@@ -543,12 +820,12 @@ class ObjectDetectorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final Paint boxPaint = Paint()
-      ..color = Colors.yellow // Changed to visible yellow
+      ..color = Colors.yellow
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
 
     final Paint bgPaint = Paint()
-      ..color = Colors.yellow.withOpacity(0.3); // Semi-transparent yellow background
+      ..color = Colors.yellow.withOpacity(0.3);
 
     // Calculate offsets to center the image
     final scaledWidth = imageSize.width * scale;
