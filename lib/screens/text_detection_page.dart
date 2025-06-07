@@ -83,30 +83,6 @@ class CameraPage extends StatefulWidget {
   State<CameraPage> createState() => _CameraPageState();
 }
 
-class GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withOpacity(0.4) // Slightly less opaque grid
-      ..strokeWidth = 0.5;
-
-    final double thirdWidth = size.width / 3;
-    final double thirdHeight = size.height / 3;
-
-    canvas.drawLine(
-        Offset(thirdWidth, 0), Offset(thirdWidth, size.height), paint);
-    canvas.drawLine(
-        Offset(2 * thirdWidth, 0), Offset(2 * thirdWidth, size.height), paint);
-    canvas.drawLine(
-        Offset(0, thirdHeight), Offset(size.width, thirdHeight), paint);
-    canvas.drawLine(
-        Offset(0, 2 * thirdHeight), Offset(size.width, 2 * thirdHeight), paint);
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
-}
-
 class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
@@ -145,6 +121,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Hide system UI for full screen experience
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     if (widget.cameras.isNotEmpty) {
       _setupCamerasAndInitialize();
     }
@@ -213,6 +191,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _focusPointTimer?.cancel();
     _controller?.dispose();
+    // Restore system UI
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -361,9 +341,6 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       // Set focus mode to auto before setting point, then set point
       await _controller!.setFocusMode(FocusMode.auto);
       await _controller!.setFocusPoint(tapPoint);
-      // Optionally, set exposure point too if desired
-      // await _controller!.setExposureMode(ExposureMode.auto);
-      // await _controller!.setExposurePoint(tapPoint);
 
       print("Focus point set to: $tapPoint");
 
@@ -385,47 +362,52 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
   Widget _buildCameraPreview(BuildContext context) {
     if (_controller == null || !_controller!.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
     }
 
-    double cameraAspectRatio = _controller!.value.aspectRatio;
-    if (cameraAspectRatio > 1) cameraAspectRatio = 1.0 / cameraAspectRatio;
-
-    return Container(
-      color: Colors.black,
-      child: Center(
-        child: AspectRatio(
-          key: _previewContainerKey, // Assign key here
-          aspectRatio: cameraAspectRatio,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              GestureDetector(
-                // For pinch-to-zoom and tap-to-focus
-                onScaleStart: _handleScaleStart,
-                onScaleUpdate: _handleScaleUpdate,
-                onTapUp: _handleTapToFocus,
-                child: CameraPreview(_controller!),
-              ),
-              CustomPaint(painter: GridPainter()),
-              if (_focusPoint != null) // Visual focus indicator
-                Positioned(
-                  left: _focusPoint!.dx - 30, // Adjust size/position as needed
-                  top: _focusPoint!.dy - 30,
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.yellow, width: 2),
-                      shape: BoxShape.rectangle, // Or CircleShape
+    return ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width,
+            height: MediaQuery.of(context).size.width * _controller!.value.aspectRatio,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  key: _previewContainerKey,
+                  onScaleStart: _handleScaleStart,
+                  onScaleUpdate: _handleScaleUpdate,
+                  onTapUp: _handleTapToFocus,
+                  child: CameraPreview(_controller!),
+                ),
+                if (_focusPoint != null) // Visual focus indicator
+                  Positioned(
+                    left: _focusPoint!.dx - 30,
+                    top: _focusPoint!.dy - 30,
+                    child: Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.yellow, width: 2),
+                        shape: BoxShape.rectangle,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _goBack() {
+    // Restore system UI before going back
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    Navigator.of(context).pop();
   }
 
   @override
@@ -433,168 +415,176 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     if (widget.cameras.isEmpty) return const NoCameraPage();
 
     return Scaffold(
-      backgroundColor: Colors.black, // Make background black for immersive feel
-      body: SafeArea(
-        // Ensure UI respects notches and system areas
-        child: Stack(
-          children: [
-            // Camera Preview
-            Positioned.fill(
-              child: FutureBuilder<void>(
-                future: _initializeControllerFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.done &&
-                      _isCameraInitialized) {
-                    return _buildCameraPreview(context);
-                  } else if (snapshot.hasError) {
-                    return Center(
-                        child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                                "Error loading camera: ${snapshot.error}",
-                                textAlign: TextAlign.center)));
-                  }
-                  return const Center(child: CircularProgressIndicator());
-                },
-              ),
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Full screen camera preview
+          Positioned.fill(
+            child: FutureBuilder<void>(
+              future: _initializeControllerFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done &&
+                    _isCameraInitialized) {
+                  return _buildCameraPreview(context);
+                } else if (snapshot.hasError) {
+                  return Center(
+                      child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                              "Error loading camera: ${snapshot.error}",
+                              style: const TextStyle(color: Colors.white),
+                              textAlign: TextAlign.center)));
+                }
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
+              },
             ),
+          ),
 
-            // Top Controls (Flash)
-            Positioned(
-              top: 10,
-              left: 0,
-              right: 0,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween, // Align flash to one side
-                  children: [
-                    Container(
-                      // Placeholder for other potential top-left controls
-                      width: 48, height: 48,
-                    ),
-                    if (_isCameraInitialized &&
-                        _controller != null &&
-                        _controller!.value.isInitialized)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: Icon(_getFlashIcon(),
-                              color: Colors.white, size: 28),
-                          onPressed: _isProcessing ? null : _toggleFlashMode,
-                          tooltip: 'Toggle Flash',
-                        ),
-                      ),
-                  ],
+          // Top controls - Back button and Flash button
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 20,
+            left: 20,
+            right: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Back button
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: _goBack,
+                  ),
                 ),
-              ),
-            ),
-
-            // Zoom Level Indicator (Optional)
-            if (_isCameraInitialized &&
-                _currentZoomLevel > 1.01) // Show only if zoomed
-              Positioned(
-                top: 70, // Adjust position as needed
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                // Flash button
+                if (_isCameraInitialized &&
+                    _controller != null &&
+                    _controller!.value.isInitialized)
+                  Container(
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(10),
+                      shape: BoxShape.circle,
                     ),
-                    child: Text(
-                      "${_currentZoomLevel.toStringAsFixed(1)}x",
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    child: IconButton(
+                      icon: Icon(_getFlashIcon(),
+                          color: Colors.white, size: 24),
+                      onPressed: _isProcessing ? null : _toggleFlashMode,
+                      tooltip: 'Toggle Flash',
                     ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Zoom Level Indicator
+          if (_isCameraInitialized && _currentZoomLevel > 1.01)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 80,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    "${_currentZoomLevel.toStringAsFixed(1)}x",
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ),
               ),
+            ),
 
-            // Bottom Controls
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 120 +
-                    MediaQuery.of(context).padding.bottom, // Adjusted height
-                padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).padding.bottom > 0
-                        ? MediaQuery.of(context).padding.bottom
-                        : 20,
-                    top: 20),
-                color: Colors.black.withOpacity(
-                    0.0), // Make transparent to blend with black scaffold
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.photo_library_outlined,
-                          size: 32, color: Colors.white),
-                      onPressed: (_isProcessing || !_isCameraInitialized)
-                          ? null
-                          : _openGallery,
-                      tooltip: 'Open Gallery',
+          // Bottom controls
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 50,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Gallery button
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
                     ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: (_isProcessing || !_isCameraInitialized)
-                            ? null
-                            : _takePicture,
-                        customBorder: const CircleBorder(),
-                        splashColor: Colors.white.withOpacity(0.5),
-                        highlightColor: Colors.white.withOpacity(0.3),
-                        child: Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: Colors.grey.shade300,
-                                  width: 3), // Lighter border
-                              boxShadow: [
-                                BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 5,
-                                    offset: const Offset(0, 2))
-                              ]),
-                          child: (_isProcessing &&
-                                  (_controller?.value.isTakingPicture ?? false))
-                              ? const Padding(
-                                  padding: EdgeInsets.all(16.0),
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 3))
-                              : null,
-                        ),
+                    child: IconButton(
+                      icon: const Icon(Icons.photo_library, size: 24, color: Colors.white),
+                      onPressed: (_isProcessing || !_isCameraInitialized) ? null : _openGallery,
+                    ),
+                  ),
+                  const SizedBox(width: 50),
+                  // Capture button
+                  GestureDetector(
+                    onTap: (_isProcessing || !_isCameraInitialized) ? null : _takePicture,
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: _isProcessing
+                            ? const CircularProgressIndicator(
+                                color: Colors.black,
+                                strokeWidth: 3,
+                              )
+                            : Container(
+                                width: 65,
+                                height: 65,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.flip_camera_ios_outlined,
-                          size: 32, color: Colors.white),
+                  ),
+                  const SizedBox(width: 50),
+                  // Flip camera button
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.flip_camera_ios_outlined, size: 24, color: Colors.white),
                       onPressed: (_isProcessing ||
                               !_isCameraInitialized ||
                               _frontCamera == null ||
                               _backCamera == null)
                           ? null
                           : _flipCamera,
-                      tooltip: 'Flip Camera',
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -608,34 +598,41 @@ class AcceptDenyPage extends StatefulWidget {
   State<AcceptDenyPage> createState() => _AcceptDenyPageState();
 }
 
-// This is the class we are modifying
 class _AcceptDenyPageState extends State<AcceptDenyPage> {
   String _ocrResult = 'Processing...';
   bool _isLoading = true;
+  File? _imageFile;
+  Size? _imageSize;
 
-  // Existing state variables for text formatting
+  // Text formatting state variables
   bool _isTextBold = false;
   double _currentFontSize = 15.0;
   static const double _minFontSize = 10.0;
   static const double _maxFontSize = 30.0;
   static const double _fontSizeStep = 1.0;
 
-  final String _googleApiKey =
-      "AIzaSyCZYjhnCmIZ53Z6zIzNTHEPz-AVO8R7He4"; // [ Already in your code ]
+  // Draggable sheet state
+  DraggableScrollableController _dragController = DraggableScrollableController();
+  double _initialChildSize = 0.4;
+  double _minChildSize = 0.1;
+  double _maxChildSize = 1.0;
+  bool _showDraggable = false;
 
-  // New state variables for smooth dragging
-  double? _currentTextPaneHeight; // Current height of the text pane
-  final double _initialTextPaneProportion =
-      0.4; // Text pane will initially take 40% of available vertical space
-  final double _minPanePixelHeight =
-      80.0; // Minimum height for both image and text panes
-  final double _draggableHandleHeight = 24.0; // Height of the drag handle
+  final String _googleApiKey = "AIzaSyCZYjhnCmIZ53Z6zIzNTHEPz-AVO8R7He4";
 
   @override
   void initState() {
     super.initState();
-    // Call the new OCR processing method
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _imageFile = File(widget.imagePath);
     _processImageWithGoogleVision(widget.imagePath);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _dragController.dispose();
+    super.dispose();
   }
 
   void _increaseFontSize() {
@@ -658,20 +655,23 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
     });
   }
 
-  void _handleVerticalDragSmooth(
-      DragUpdateDetails details, double totalHeightForTextAndImagePanes) {
-    if (_currentTextPaneHeight == null) return; // Should be initialized by now
-    setState(() {
-      // If finger drags handle DOWN (details.delta.dy > 0), text pane (below handle) should SHRINK.
-      // If finger drags handle UP (details.delta.dy < 0), text pane (below handle) should EXPAND.
-      // So, we subtract details.delta.dy from the current text pane's height.
-      double newTextPaneHeight =
-          _currentTextPaneHeight! - details.delta.dy; // Changed from + to -
+  void _goBack() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    Navigator.of(context).pop();
+  }
 
-      // Clamping logic remains the same: ensures neither pane goes below _minPanePixelHeight
-      _currentTextPaneHeight = newTextPaneHeight.clamp(_minPanePixelHeight,
-          totalHeightForTextAndImagePanes - _minPanePixelHeight);
+  void _resetDetection() {
+    setState(() {
+      _imageFile = null;
+      _ocrResult = 'Processing...';
+      _isLoading = true;
+      _showDraggable = false;
     });
+    _dragController.animateTo(
+      _minChildSize,
+      duration: Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _processImageWithGoogleVision(String imagePath) async {
@@ -679,15 +679,14 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
 
     setState(() {
       _isLoading = true;
-      _ocrResult = "Preparing image and contacting Google Vision API...";
+      _ocrResult = "Detecting text...";
+      _showDraggable = true;
     });
 
-    if (_googleApiKey == "YOUR_GOOGLE_CLOUD_VISION_API_KEY" ||
-        _googleApiKey.isEmpty) {
+    if (_googleApiKey == "YOUR_GOOGLE_CLOUD_VISION_API_KEY" || _googleApiKey.isEmpty) {
       if (mounted) {
         setState(() {
-          _ocrResult =
-              "ERROR: Google Cloud Vision API Key is not set in the code. Please replace the placeholder API key in _AcceptDenyPageState.";
+          _ocrResult = "ERROR: Google Cloud Vision API Key is not set in the code.";
           _isLoading = false;
         });
       }
@@ -705,7 +704,11 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
     }
 
     try {
-      // 1. Read image file
+      // Get image dimensions
+      final imageBytes = await File(imagePath).readAsBytes();
+      final decodedImage = await decodeImageFromList(imageBytes);
+      _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+
       final File imageFile = File(imagePath);
       if (!await imageFile.exists()) {
         if (mounted) {
@@ -716,35 +719,26 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
         }
         return;
       }
-      Uint8List imageBytes = await imageFile.readAsBytes();
 
-      // 2. Preprocess image using the 'image' package
-      // This mimics parts of your Python preprocessing: grayscale and median blur.
-      // Adaptive thresholding is more complex and not directly available in the 'image' package.
-      img.Image? originalImage = img.decodeImage(imageBytes);
+      Uint8List imageFileBytes = await imageFile.readAsBytes();
       String base64Image;
+
+      img.Image? originalImage = img.decodeImage(imageFileBytes);
 
       if (originalImage != null) {
         print("Preprocessing image: Grayscale and Median Blur...");
         img.Image grayscaleImage = img.grayscale(originalImage);
-        // Median filter with radius 1 is a 3x3 kernel, similar to cv2.medianBlur(img, 3)
         img.Image denoisedImage = img.gaussianBlur(grayscaleImage, radius: 1);
 
-        // Encode back to PNG (lossless, good after processing) or JPEG
-        List<int> processedImageBytes =
-            img.encodePng(denoisedImage); // Or img.encodeJpg for smaller size
+        List<int> processedImageBytes = img.encodePng(denoisedImage);
         base64Image = base64Encode(processedImageBytes);
         print("Preprocessing complete. Image encoded to base64.");
       } else {
-        // Fallback to original bytes if decoding failed (should not happen for valid images from picker/camera)
-        print(
-            "Warning: Could not decode image for preprocessing. Using original image bytes.");
-        base64Image = base64Encode(imageBytes);
+        print("Warning: Could not decode image for preprocessing. Using original image bytes.");
+        base64Image = base64Encode(imageFileBytes);
       }
 
-      // 3. Construct Google Vision API request payload
-      String visionApiUrl =
-          'https://vision.googleapis.com/v1/images:annotate?key=$_googleApiKey';
+      String visionApiUrl = 'https://vision.googleapis.com/v1/images:annotate?key=$_googleApiKey';
       Map<String, dynamic> requestPayload = {
         'requests': [
           {
@@ -752,26 +746,21 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
             'features': [
               {'type': 'TEXT_DETECTION'}
             ],
-            // Optional: Add language hints if your Python model used them
-            // 'imageContext': {'languageHints': ['en', 'id']}
           }
         ]
       };
 
       print("Sending request to Google Vision API...");
-      // 4. Make HTTP POST request
       final response = await http
           .post(
             Uri.parse(visionApiUrl),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(requestPayload),
           )
-          .timeout(const Duration(seconds: 60)); // Increased timeout slightly
+          .timeout(const Duration(seconds: 60));
 
-      print(
-          "Received response from Google Vision API. Status: ${response.statusCode}");
+      print("Received response from Google Vision API. Status: ${response.statusCode}");
 
-      // 5. Parse response and update UI
       if (!mounted) return;
 
       setState(() {
@@ -784,27 +773,26 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
             var firstResponse = decodedResponse['responses'][0];
             if (firstResponse['error'] != null &&
                 firstResponse['error']['message'] != null) {
-              _ocrResult =
-                  "Google API Error: ${firstResponse['error']['message']}";
+              _ocrResult = "Google API Error: ${firstResponse['error']['message']}";
             } else if (firstResponse['textAnnotations'] != null &&
                 firstResponse['textAnnotations'].isNotEmpty) {
-              // The first textAnnotation is the full detected text block.
-              _ocrResult =
-                  firstResponse['textAnnotations'][0]['description']?.trim() ??
-                      "No text description found.";
-              if (_ocrResult.isEmpty)
-                _ocrResult = "No text detected in image (empty description).";
+              _ocrResult = firstResponse['textAnnotations'][0]['description']?.trim() ?? "No text description found.";
+              if (_ocrResult.isEmpty) _ocrResult = "No text detected in image (empty description).";
+              
+              // Expand the sheet when text is detected
+              _dragController.animateTo(
+                0.5,
+                duration: Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
             } else {
               _ocrResult = "No text detected in image (no textAnnotations).";
             }
           } else {
-            // This case might indicate an issue with the API key or request structure if no 'responses' array is present.
-            _ocrResult =
-                "Invalid response structure from Google API. Raw: ${response.body.substring(0, (response.body.length > 200 ? 200 : response.body.length))}";
+            _ocrResult = "Invalid response structure from Google API. Raw: ${response.body.substring(0, (response.body.length > 200 ? 200 : response.body.length))}";
           }
         } else {
-          _ocrResult =
-              "Error calling Google API: HTTP ${response.statusCode}\nResponse: ${response.body.substring(0, (response.body.length > 300 ? 300 : response.body.length))}";
+          _ocrResult = "Error calling Google API: HTTP ${response.statusCode}\nResponse: ${response.body.substring(0, (response.body.length > 300 ? 300 : response.body.length))}";
         }
       });
     } on TimeoutException catch (e) {
@@ -812,16 +800,14 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _ocrResult =
-            "Request to Google Vision API timed out. Please check your internet connection and try again.";
+        _ocrResult = "Request to Google Vision API timed out. Please check your internet connection and try again.";
       });
     } on SocketException catch (e) {
       print("Socket/Network Error: $e");
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _ocrResult =
-            "Network error: Could not connect to Google Vision API. Please check your internet connection.";
+        _ocrResult = "Network error: Could not connect to Google Vision API. Please check your internet connection.";
       });
     } catch (e) {
       print("Unexpected Error in _processImageWithGoogleVision: $e");
@@ -835,206 +821,246 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Approximate height of the formatting controls row.
-    // For more precision, you could use a GlobalKey and get its size after layout.
-    const double formattingControlsApproxHeight = 70.0;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Text Recognition Result'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (mounted) {
-              Navigator.of(context).pop();
-            }
-          },
-        ),
-      ),
-      body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final double totalScaffoldBodyHeight = constraints.maxHeight;
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Full screen image
+          Positioned.fill(
+            child: _imageFile != null
+                ? AspectRatio(
+                    aspectRatio: _imageSize != null 
+                        ? _imageSize!.width / _imageSize!.height 
+                        : 1.0,
+                    child: Image.file(
+                      _imageFile!,
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+          ),
 
-          // Calculate the height available for the image, handle, and text panes
-          final double heightAvailableForResizableContent =
-              totalScaffoldBodyHeight -
-                  formattingControlsApproxHeight - // Subtract height of formatting controls
-                  _draggableHandleHeight - // Subtract height of the drag handle
-                  (MediaQuery.of(context).padding.bottom > 0
-                      ? 0
-                      : 8.0); // Adjust for bottom padding/notch
-
-          // Initialize _currentTextPaneHeight on the first build or if layout changes
-          if (_currentTextPaneHeight == null ||
-              (_currentTextPaneHeight! > heightAvailableForResizableContent)) {
-            _currentTextPaneHeight =
-                heightAvailableForResizableContent * _initialTextPaneProportion;
-          }
-
-          // Clamp the text pane's height based on available space and minimums
-          _currentTextPaneHeight = _currentTextPaneHeight!.clamp(
-              _minPanePixelHeight,
-              heightAvailableForResizableContent -
-                  _minPanePixelHeight // Max height ensuring image pane also has min height
-              );
-
-          double actualTextPaneHeight = _currentTextPaneHeight!;
-          double actualImagePaneHeight =
-              heightAvailableForResizableContent - actualTextPaneHeight;
-
-          // Ensure image pane height is also at least minimum (could happen if total space is very small)
-          if (actualImagePaneHeight < _minPanePixelHeight) {
-            actualImagePaneHeight = _minPanePixelHeight;
-            // If we adjusted image height, re-calculate text height if possible, or accept overlap if space too small
-            if (heightAvailableForResizableContent - actualImagePaneHeight >=
-                _minPanePixelHeight) {
-              actualTextPaneHeight =
-                  heightAvailableForResizableContent - actualImagePaneHeight;
-              _currentTextPaneHeight =
-                  actualTextPaneHeight; // Update state if changed
-            } else {
-              // This case means total space is not enough for two min height panes + handle.
-              // One or both might appear smaller than _minPanePixelHeight.
-              // For simplicity, we prioritize text pane's calculated height if image had to be adjusted.
-              actualTextPaneHeight =
-                  heightAvailableForResizableContent - actualImagePaneHeight;
-              _currentTextPaneHeight = actualTextPaneHeight.clamp(
-                  _minPanePixelHeight, double.infinity);
-            }
-          }
-
-          return Column(
-            children: [
-              // Image Area
-              SizedBox(
-                height: actualImagePaneHeight.isNegative
-                    ? 0
-                    : actualImagePaneHeight,
-                child: Container(
-                  color: Colors.grey[200],
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.all(12.0),
-                  child: Image.file(
-                    File(widget.imagePath),
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                          child: Text("Failed to load image preview.",
-                              style: TextStyle(color: Colors.red)));
-                    },
+          // Top controls - Back button
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 20,
+            left: 20,
+            right: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Back button
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: _goBack,
                   ),
                 ),
-              ),
-
-              // Draggable Handle
-              GestureDetector(
-                onVerticalDragUpdate: (details) => _handleVerticalDragSmooth(
-                    details, heightAvailableForResizableContent),
-                child: Container(
-                  height: _draggableHandleHeight,
-                  color:
-                      Theme.of(context).colorScheme.secondary.withOpacity(0.4),
-                  child: const Center(
-                    child: Icon(
-                      Icons.drag_handle,
-                      size: 22.0,
-                      color: Colors.white70,
+                // Reset button
+                if (_imageFile != null)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.refresh, size: 24, color: Colors.white),
+                      onPressed: _resetDetection,
                     ),
                   ),
-                ),
-              ),
+              ],
+            ),
+          ),
 
-              // Text Result Area
-              SizedBox(
-                height:
-                    actualTextPaneHeight.isNegative ? 0 : actualTextPaneHeight,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+          // Draggable results sheet - Only show when processing or text detected
+          if (_imageFile != null && _showDraggable)
+            DraggableScrollableSheet(
+              initialChildSize: _initialChildSize,
+              minChildSize: _minChildSize,
+              maxChildSize: _maxChildSize,
+              controller: _dragController,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(32),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 15,
+                        offset: Offset(0, -5),
+                      ),
+                    ],
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Handle
+                      Container(
+                        margin: const EdgeInsets.only(top: 12),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      // Content
                       Expanded(
-                        // Use Expanded here so the Container fills the SizedBox
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade400),
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.grey.shade50,
-                          ),
-                          child: _isLoading
-                              ? const Center(
-                                  child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    CircularProgressIndicator(),
-                                    SizedBox(height: 16),
-                                    Text("Detecting Text via Google Vision...",
-                                        textAlign: TextAlign.center,
+                        child: SingleChildScrollView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Title
+                              const Text(
+                                "Text Recognition Result",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Text result container
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: _isLoading
+                                    ? const Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          CircularProgressIndicator(),
+                                          SizedBox(height: 16),
+                                          Text(
+                                            "Detecting Text via Google Vision...",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontStyle: FontStyle.italic,
+                                              color: Colors.black54,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : SelectableText(
+                                        _ocrResult,
+                                        textAlign: TextAlign.left,
                                         style: TextStyle(
-                                            fontStyle: FontStyle.italic)),
-                                  ],
-                                ))
-                              : SingleChildScrollView(
-                                  child: SelectableText(
-                                    _ocrResult,
-                                    textAlign: TextAlign.left,
-                                    style: TextStyle(
-                                      fontSize: _currentFontSize,
-                                      fontWeight: _isTextBold
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                    ),
+                                          fontSize: _currentFontSize,
+                                          fontWeight: _isTextBold
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                              ),
+                              
+                              const SizedBox(height: 20),
+                              
+                              // Text formatting controls
+                              if (!_isLoading) ...[
+                                const Text(
+                                  "Text Formatting",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
                                   ),
                                 ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    // Decrease font size
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.text_decrease),
+                                        iconSize: 24,
+                                        onPressed: _decreaseFontSize,
+                                        tooltip: 'Decrease font size',
+                                      ),
+                                    ),
+                                    // Font size indicator
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                                      ),
+                                      child: Text(
+                                        '${_currentFontSize.toStringAsFixed(0)}px',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    // Increase font size
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.text_increase),
+                                        iconSize: 24,
+                                        onPressed: _increaseFontSize,
+                                        tooltip: 'Increase font size',
+                                      ),
+                                    ),
+                                    // Bold toggle
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: _isTextBold 
+                                            ? Colors.blue.withOpacity(0.2)
+                                            : Colors.grey.shade200,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.format_bold),
+                                        iconSize: 24,
+                                        color: _isTextBold
+                                            ? Colors.blue
+                                            : Colors.grey[600],
+                                        onPressed: _toggleBold,
+                                        tooltip: 'Toggle Bold',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              
+                              // Add some bottom padding
+                              const SizedBox(height: 20),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              // Text Formatting Controls (Their height is accounted for by formattingControlsApproxHeight)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      iconSize: 28,
-                      onPressed: _decreaseFontSize,
-                      tooltip: 'Decrease font size',
-                    ),
-                    Text(
-                      '${_currentFontSize.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w500),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      iconSize: 28,
-                      onPressed: _increaseFontSize,
-                      tooltip: 'Increase font size',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.format_bold),
-                      iconSize: 28,
-                      color: _isTextBold
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey[600],
-                      onPressed: _toggleBold,
-                      tooltip: 'Toggle Bold',
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                  height: MediaQuery.of(context).padding.bottom > 0 ? 0 : 8.0)
-            ],
-          );
-        },
+                );
+              },
+            ),
+        ],
       ),
     );
   }
