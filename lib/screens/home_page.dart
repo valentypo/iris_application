@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'login_page.dart';
+import 'object_detection.dart';
 import 'text_detection_page.dart';
 import 'package:camera/camera.dart';
 
@@ -469,6 +470,28 @@ class _HomePageState extends State<HomePage> {
                                 color: Color(0xFF234462),
                                 borderRadius: BorderRadius.circular(20),
                               ),
+                              child: GestureDetector(  // Add GestureDetector here
+                                onTap: () {
+                                  // Check if cameras are available before navigating
+                                  if (widget.cameras.isNotEmpty) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ObjectDetection(
+                                          cameras: widget.cameras,
+                                        ),
+                                      ),
+                                    );
+                                  } else {
+                                    // Show error message if no cameras available
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('No cameras available on this device'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -489,6 +512,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ],
                               ),
+                            ),
                             ),
                           ),
                         ],

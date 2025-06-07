@@ -10,27 +10,20 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  firebase_core: ^3.6.0  # Update to latest
-  firebase_auth: ^5.3.1  # Update to latest
-  cloud_firestore: ^5.4.4  # Update to latest
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
   fluttertoast: ^8.2.10
   shared_preferences: ^2.3.3
   image_picker: ^1.0.4
-  http: ^0.13.6
+  http: ^1.1.0
   image: ^4.1.7
   camera: ^0.10.5+9
-  path_provider: ^2.1.2  
-  google_mlkit_commons: ^0.7.1  # Update from 0.5.0
-  # Also update other ML Kit packages if you're using them:
+  path_provider: ^2.1.2
+  google_mlkit_commons: ^0.7.1
   google_mlkit_text_recognition: ^0.13.0
   google_mlkit_face_detection: ^0.10.0
-  google_mlkit_barcode_scanning: ^0.11.0          # For file access
-
-  firebase_core: ^2.32.0
-  firebase_auth: ^4.20.0
-  fluttertoast: ^8.2.8
-  cloud_firestore: ^4.17.5
-  shared_preferences: ^2.2.2
+  google_mlkit_barcode_scanning: ^0.11.0
 
 dev_dependencies:
   flutter_test:
