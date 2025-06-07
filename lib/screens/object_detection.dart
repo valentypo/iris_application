@@ -27,8 +27,8 @@ class _ObjectDetectionState extends State<ObjectDetection> {
   // For draggable sheet
   DraggableScrollableController _dragController = DraggableScrollableController();
   double _initialChildSize = 0.3;
-  double _minChildSize = 0.1;
-  double _maxChildSize = 1.0;
+  double _minChildSize = 0.3;
+  double _maxChildSize = 0.8;
 
   // Change this to your computer's IP address when testing on physical device
   static const String baseUrl = 'http://172.20.10.5:5000';
@@ -37,8 +37,6 @@ class _ObjectDetectionState extends State<ObjectDetection> {
   @override
   void initState() {
     super.initState();
-    // Hide system UI for full screen experience
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initializeApp();
   }
 
@@ -261,28 +259,11 @@ class _ObjectDetectionState extends State<ObjectDetection> {
           Positioned.fill(
             child: isCameraReady
                 ? (_imageFile != null
-                    ? AspectRatio(
-                        aspectRatio: _imageSize != null 
-                            ? _imageSize!.width / _imageSize!.height 
-                            : 1.0,
-                        child: Image.file(
-                          _imageFile!,
-                          fit: BoxFit.contain,
-                        ),
+                    ? Image.file(
+                        _imageFile!,
+                        fit: BoxFit.cover,
                       )
-                    : ClipRect(
-                        child: OverflowBox(
-                          alignment: Alignment.center,
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            child: SizedBox(
-                              width: MediaQuery.of(context).size.width,
-                              height: MediaQuery.of(context).size.width * _cameraController.value.aspectRatio,
-                              child: CameraPreview(_cameraController),
-                            ),
-                          ),
-                        ),
-                      ))
+                    : CameraPreview(_cameraController))
                 : const Center(
                     child: CircularProgressIndicator(color: Colors.white),
                   ),
@@ -293,25 +274,9 @@ class _ObjectDetectionState extends State<ObjectDetection> {
             Positioned.fill(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // For captured images, use proper aspect ratio scaling
-                  final imageAspectRatio = _imageSize!.width / _imageSize!.height;
-                  final screenAspectRatio = constraints.maxWidth / constraints.maxHeight;
-                  
-                  double scale;
-                  double offsetX = 0;
-                  double offsetY = 0;
-                  
-                  if (imageAspectRatio > screenAspectRatio) {
-                    // Image is wider than screen
-                    scale = constraints.maxWidth / _imageSize!.width;
-                    final scaledHeight = _imageSize!.height * scale;
-                    offsetY = (constraints.maxHeight - scaledHeight) / 2;
-                  } else {
-                    // Image is taller than screen
-                    scale = constraints.maxHeight / _imageSize!.height;
-                    final scaledWidth = _imageSize!.width * scale;
-                    offsetX = (constraints.maxWidth - scaledWidth) / 2;
-                  }
+                  final widthRatio = constraints.maxWidth / _imageSize!.width;
+                  final heightRatio = constraints.maxHeight / _imageSize!.height;
+                  final scale = widthRatio < heightRatio ? widthRatio : heightRatio;
                   
                   return CustomPaint(
                     painter: ObjectDetectorPainter(
@@ -319,8 +284,6 @@ class _ObjectDetectionState extends State<ObjectDetection> {
                       scale,
                       _imageSize!,
                       constraints.biggest,
-                      offsetX,
-                      offsetY,
                     ),
                   );
                 },
@@ -574,10 +537,8 @@ class ObjectDetectorPainter extends CustomPainter {
   final double scale;
   final Size imageSize;
   final Size canvasSize;
-  final double offsetX;
-  final double offsetY;
 
-  ObjectDetectorPainter(this.objects, this.scale, this.imageSize, this.canvasSize, this.offsetX, this.offsetY);
+  ObjectDetectorPainter(this.objects, this.scale, this.imageSize, this.canvasSize);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -588,6 +549,12 @@ class ObjectDetectorPainter extends CustomPainter {
 
     final Paint bgPaint = Paint()
       ..color = Colors.yellow.withOpacity(0.3); // Semi-transparent yellow background
+
+    // Calculate offsets to center the image
+    final scaledWidth = imageSize.width * scale;
+    final scaledHeight = imageSize.height * scale;
+    final offsetX = (canvasSize.width - scaledWidth) / 2;
+    final offsetY = (canvasSize.height - scaledHeight) / 2;
 
     for (final obj in objects) {
       // Scale and offset the bounding box
