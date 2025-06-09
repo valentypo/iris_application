@@ -31,11 +31,12 @@ class Reminder {
 class HomePage extends StatefulWidget {
   final String email;
   final String? username;
-  final List<CameraDescription> cameras; // Move cameras to constructor parameters
+  final List<CameraDescription>
+  cameras; // Move cameras to constructor parameters
 
   const HomePage({
-    super.key, 
-    required this.email, 
+    super.key,
+    required this.email,
     this.username,
     required this.cameras, // Make cameras required
   });
@@ -108,7 +109,7 @@ class _HomePageState extends State<HomePage> {
           (context) => StatefulBuilder(
             builder:
                 (context, setDialogState) => AlertDialog(
-                  title: Text('Add Medication Reminder'),
+                  title: Text('Add a Reminder'),
                   content: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -424,16 +425,19 @@ class _HomePageState extends State<HomePage> {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) => TextDetectionApp(
-                                          cameras: widget.cameras,
-                                        ),
+                                        builder:
+                                            (context) => TextDetectionApp(
+                                              cameras: widget.cameras,
+                                            ),
                                       ),
                                     );
                                   } else {
                                     // Show error message if no cameras available
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('No cameras available on this device'),
+                                        content: Text(
+                                          'No cameras available on this device',
+                                        ),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
@@ -470,49 +474,53 @@ class _HomePageState extends State<HomePage> {
                                 color: Color(0xFF234462),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: GestureDetector(  // Add GestureDetector here
+                              child: GestureDetector(
+                                // Add GestureDetector here
                                 onTap: () {
                                   // Check if cameras are available before navigating
                                   if (widget.cameras.isNotEmpty) {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) => ObjectDetection(
-                                          cameras: widget.cameras,
-                                        ),
+                                        builder:
+                                            (context) => ObjectDetection(
+                                              cameras: widget.cameras,
+                                            ),
                                       ),
                                     );
                                   } else {
                                     // Show error message if no cameras available
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('No cameras available on this device'),
+                                        content: Text(
+                                          'No cameras available on this device',
+                                        ),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
                                   }
                                 },
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.search,
-                                    color: Colors.white,
-                                    size: 40,
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    "Object\nDetector",
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.search,
                                       color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                                      size: 40,
                                     ),
-                                  ),
-                                ],
+                                    SizedBox(height: 8),
+                                    Text(
+                                      "Object\nDetector",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
                             ),
                           ),
                         ],
