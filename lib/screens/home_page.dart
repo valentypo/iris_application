@@ -338,6 +338,7 @@ class _HomePageState extends State<HomePage> {
                         top: Radius.circular(32),
                       ),
                     ),
+                    child: SingleChildScrollView(
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: Column(
@@ -626,6 +627,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
+                ),
                 ),
               ],
             ),

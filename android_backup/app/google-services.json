@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "618479568238",
+    "project_id": "iris-85abc",
+    "storage_bucket": "iris-85abc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:618479568238:android:dda19a14b1707cc9586d7f",
+        "android_client_info": {
+          "package_name": "com.example.iris_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAC3laZwO2XTFQEWEzQ9iajQ03llwOnS_Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:618479568238:android:c1cebc90411cf4c8586d7f",
+        "android_client_info": {
+          "package_name": "com.example.iris_application"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAC3laZwO2XTFQEWEzQ9iajQ03llwOnS_Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

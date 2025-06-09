@@ -181,13 +181,13 @@ class _RegisterPageState extends State<RegisterPage> {
                   height: 40,
                   child: ElevatedButton(
                     onPressed: () async {
-                      if (_passwordController.text !=
-                          _confirmPasswordController.text) {
+                      if (_passwordController.text != _confirmPasswordController.text) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Passwords do not match')),
                         );
                         return;
                       }
+
                       try {
                         await AuthServices().signup(
                           email: _emailController.text,
@@ -195,33 +195,34 @@ class _RegisterPageState extends State<RegisterPage> {
                           username: _usernameController.text,
                         );
                         print('Registration successful, showing dialog');
+
+                        // ✅ ADD THIS
+                        if (!mounted) return;
+
                         await showDialog(
                           context: context,
-                          builder:
-                              (context) => AlertDialog(
-                                title: Text('Registration Successful'),
-                                content: Text('Your account has been created!'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.of(context).pop();
-                                      Navigator.pushReplacement(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder:
-                                              (context) => HomePage(
-                                                cameras: cameras,
-                                                email: _emailController.text,
-                                                username:
-                                                    _usernameController.text,
-                                              ),
-                                        ),
-                                      );
-                                    },
-                                    child: Text('OK'),
-                                  ),
-                                ],
+                          builder: (context) => AlertDialog(
+                            title: Text('Registration Successful'),
+                            content: Text('Your account has been created!'),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => HomePage(
+                                        cameras: cameras,
+                                        email: _emailController.text,
+                                        username: _usernameController.text,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Text('OK'),
                               ),
+                            ],
+                          ),
                         );
                       } catch (e) {
                         print('Registration failed: $e');
@@ -233,7 +234,9 @@ class _RegisterPageState extends State<RegisterPage> {
                           ),
                         );
                       }
-                    },
+                    }
+                  ,
+
                     style: ElevatedButton.styleFrom(
                       foregroundColor: Colors.white,
                       backgroundColor: Color(0xFF234462),
