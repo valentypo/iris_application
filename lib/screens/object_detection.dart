@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class ObjectDetection extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -65,12 +66,58 @@ class _ObjectDetectionState extends State<ObjectDetection>
   // Change this to your computer's IP address when testing on physical device
   static const String baseUrl = 'http://192.168.1.3:5000';
 
+  // Add these TTS-related variables at the top with other state variables
+  late FlutterTts _flutterTts;
+  bool _isSpeaking = false;
+  String _detectedLanguage = 'en';
+  String _selectedLanguage = 'auto';
+  Map<String, String> _languageNames = {
+    'auto': 'Auto',
+    'en': 'English',
+    'id': 'Bahasa',
+  };
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _initializeTts();
     _initializeApp();
+  }
+
+  // Add TTS initialization
+  void _initializeTts() {
+    _flutterTts = FlutterTts();
+
+    _flutterTts.setStartHandler(() {
+      setState(() {
+        _isSpeaking = true;
+      });
+    });
+
+    _flutterTts.setCompletionHandler(() {
+      setState(() {
+        _isSpeaking = false;
+      });
+    });
+
+    _flutterTts.setCancelHandler(() {
+      setState(() {
+        _isSpeaking = false;
+      });
+    });
+
+    _flutterTts.setErrorHandler((msg) {
+      setState(() {
+        _isSpeaking = false;
+      });
+      print("TTS Error: $msg");
+    });
+
+    _flutterTts.setPitch(1.0);
+    _flutterTts.setSpeechRate(0.5);
+    _flutterTts.setVolume(1.0);
   }
 
   Future<void> _initializeApp() async {
@@ -168,6 +215,7 @@ class _ObjectDetectionState extends State<ObjectDetection>
 
   @override
   void dispose() {
+    _flutterTts.stop();
     WidgetsBinding.instance.removeObserver(this);
     _focusPointTimer?.cancel();
     _cameraController?.dispose();
@@ -490,6 +538,108 @@ class _ObjectDetectionState extends State<ObjectDetection>
   void _goBack() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     Navigator.of(context).pop();
+  }
+
+  // Add TTS speak function
+  Future<void> _speakText() async {
+    if (_detectedObjects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No objects detected to speak about'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_isSpeaking) {
+      await _flutterTts.stop();
+      setState(() {
+        _isSpeaking = false;
+      });
+    } else {
+      String textToSpeak = _detectedObjects
+          .map((obj) {
+            return "Found ${obj.label} with ${(obj.confidence * 100).toStringAsFixed(1)}% confidence";
+          })
+          .join('. ');
+
+      String languageToUse =
+          _selectedLanguage == 'auto'
+              ? _detectedLanguage
+              : (_selectedLanguage == 'id' ? 'id-ID' : 'en-US');
+
+      await _flutterTts.setLanguage(languageToUse);
+      var result = await _flutterTts.speak(textToSpeak);
+      if (result == 1) {
+        setState(() {
+          _isSpeaking = true;
+        });
+      }
+    }
+  }
+
+  // Add language selection menu
+  void _showLanguageMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Select Language',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ..._languageNames.entries.map((entry) {
+                bool isSelected = _selectedLanguage == entry.key;
+                return ListTile(
+                  leading: Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: isSelected ? Colors.blue : Colors.grey,
+                  ),
+                  title: Text(
+                    entry.value,
+                    style: TextStyle(
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Colors.blue : Colors.black,
+                    ),
+                  ),
+                  onTap: () {
+                    setState(() {
+                      _selectedLanguage = entry.key;
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -846,6 +996,116 @@ class _ObjectDetectionState extends State<ObjectDetection>
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (!_isProcessing) ...[
+                                const SizedBox(height: 24),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Colors.blue.shade400,
+                                            Colors.blue.shade600,
+                                          ],
+                                        ),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.blue.withOpacity(0.3),
+                                            blurRadius: 15,
+                                            spreadRadius: 2,
+                                            offset: const Offset(0, 5),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: _speakText,
+                                          borderRadius: BorderRadius.circular(
+                                            40,
+                                          ),
+                                          child: Center(
+                                            child: Icon(
+                                              _isSpeaking
+                                                  ? Icons.stop_rounded
+                                                  : Icons.volume_up_rounded,
+                                              size: 30,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 25),
+                                    Container(
+                                      height: 60,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(30),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: _showLanguageMenu,
+                                          borderRadius: BorderRadius.circular(
+                                            30,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.language,
+                                                size: 24,
+                                                color: Colors.grey[700],
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _languageNames[_selectedLanguage]!,
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.grey[800],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Icon(
+                                                Icons.arrow_drop_down,
+                                                size: 24,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                Center(
+                                  child: Text(
+                                    _isSpeaking
+                                        ? 'Stop Reading'
+                                        : 'Read Objects',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[700],
                                     ),
                                   ),
                                 ),

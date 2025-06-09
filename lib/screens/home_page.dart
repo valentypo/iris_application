@@ -335,312 +335,333 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "TODAY'S REMINDER",
-                            style: TextStyle(
-                              color: Color(0xFF234462),
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "TODAY'S REMINDER",
+                              style: TextStyle(
+                                color: Color(0xFF234462),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 16),
-                          reminders.isEmpty
-                              ? Container(
-                                width: double.infinity,
-                                padding: EdgeInsets.all(20),
-                                margin: EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  color: Color(0xFF234462),
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                child: Text(
-                                  "No reminders yet.",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
+                            SizedBox(height: 16),
+                            reminders.isEmpty
+                                ? Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(20),
+                                  margin: EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF234462),
+                                    borderRadius: BorderRadius.circular(24),
                                   ),
-                                ),
-                              )
-                              : SizedBox(
-                                height: 180,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: reminders.length,
-                                  separatorBuilder:
-                                      (_, __) => SizedBox(width: 16),
-                                  itemBuilder: (context, index) {
-                                    final reminder = reminders[index];
-                                    return Dismissible(
-                                      key: ValueKey(
-                                        reminder.hashCode.toString() +
-                                            index.toString(),
-                                      ),
-                                      direction: DismissDirection.up,
-                                      onDismissed: (direction) {
-                                        _removeReminder(index);
-                                      },
-                                      background: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.red,
-                                          borderRadius: BorderRadius.circular(
-                                            24,
-                                          ),
+                                  child: Text(
+                                    "No reminders yet.",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                )
+                                : SizedBox(
+                                  height: 180,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: reminders.length,
+                                    separatorBuilder:
+                                        (_, __) => SizedBox(width: 16),
+                                    itemBuilder: (context, index) {
+                                      final reminder = reminders[index];
+                                      return Dismissible(
+                                        key: ValueKey(
+                                          reminder.hashCode.toString() +
+                                              index.toString(),
                                         ),
-                                        alignment: Alignment.center,
-                                        child: Icon(
-                                          Icons.delete,
-                                          color: Colors.white,
-                                          size: 40,
-                                        ),
-                                      ),
-                                      child: Container(
-                                        width: 260,
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 12,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Color(0xFF234462),
-                                          borderRadius: BorderRadius.circular(
-                                            24,
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Text(
-                                                  reminder.type,
-                                                  style: TextStyle(
-                                                    color: Colors.white70,
-                                                    fontSize: 14,
-                                                    letterSpacing: 1.2,
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  icon: Icon(
-                                                    Icons.delete,
-                                                    color: Colors.white70,
-                                                    size: 20,
-                                                  ),
-                                                  onPressed:
-                                                      () => _removeReminder(
-                                                        index,
-                                                      ),
-                                                ),
-                                              ],
+                                        direction: DismissDirection.up,
+                                        onDismissed: (direction) {
+                                          _removeReminder(index);
+                                        },
+                                        background: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            borderRadius: BorderRadius.circular(
+                                              24,
                                             ),
-                                            SizedBox(height: 8),
-                                            Text(
-                                              reminder.time.format(context),
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 32,
-                                                fontWeight: FontWeight.bold,
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Icon(
+                                            Icons.delete,
+                                            color: Colors.white,
+                                            size: 40,
+                                          ),
+                                        ),
+                                        child: Container(
+                                          width: 260,
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                            vertical: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Color(0xFF234462),
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    reminder.type,
+                                                    style: TextStyle(
+                                                      color: Colors.white70,
+                                                      fontSize: 14,
+                                                      letterSpacing: 1.2,
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    icon: Icon(
+                                                      Icons.delete,
+                                                      color: Colors.white70,
+                                                      size: 20,
+                                                    ),
+                                                    onPressed:
+                                                        () => _removeReminder(
+                                                          index,
+                                                        ),
+                                                  ),
+                                                ],
                                               ),
-                                            ),
-                                            SizedBox(height: 8),
-                                            Flexible(
-                                              child: Text(
-                                                reminder.description,
+                                              SizedBox(height: 8),
+                                              Text(
+                                                reminder.time.format(context),
                                                 style: TextStyle(
                                                   color: Colors.white,
-                                                  fontSize: 16,
+                                                  fontSize: 32,
+                                                  fontWeight: FontWeight.bold,
                                                 ),
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 2,
                                               ),
-                                            ),
-                                          ],
+                                              SizedBox(height: 8),
+                                              Flexible(
+                                                child: Text(
+                                                  reminder.description,
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 16,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  maxLines: 2,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                            SizedBox(height: 8),
+                            reminders.length < 5
+                                ? SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Color(0xFF234462),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
-                                    );
-                                  },
-                                ),
-                              ),
-                          SizedBox(height: 8),
-                          reminders.length < 5
-                              ? SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Color(0xFF234462),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
                                     ),
+                                    onPressed: _showAddReminderDialog,
+                                    child: Text("Add a Reminder"),
                                   ),
-                                  onPressed: _showAddReminderDialog,
-                                  child: Text("Add a Reminder"),
-                                ),
-                              )
-                              : Container(),
-                          SizedBox(height: 24),
-                          Text(
-                            "Need some help?",
-                            style: TextStyle(
-                              color: Color(0xFF234462),
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                                )
+                                : Container(),
+                            SizedBox(height: 24),
+                            Text(
+                              "Need some help?",
+                              style: TextStyle(
+                                color: Color(0xFF234462),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  height: 110,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF234462),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      // Check if cameras are available before navigating
-                                      if (widget.cameras.isNotEmpty) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder:
-                                                (context) => TextDetectionApp(
-                                                  cameras: widget.cameras,
-                                                ),
-                                          ),
-                                        );
-                                      } else {
-                                        // Show error message if no cameras available
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'No cameras available on this device',
+                            SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 110,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF234462),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        // Check if cameras are available before navigating
+                                        if (widget.cameras.isNotEmpty) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (context) => TextDetectionApp(
+                                                    cameras: widget.cameras,
+                                                  ),
                                             ),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.text_snippet,
-                                          color: Colors.white,
-                                          size: 40,
-                                        ),
-                                        SizedBox(height: 8),
-                                        Text(
-                                          "Text\nReader",
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
+                                          );
+                                        } else {
+                                          // Show error message if no cameras available
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'No cameras available on this device',
+                                              ),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.text_snippet,
                                             color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
+                                            size: 40,
                                           ),
-                                        ),
-                                      ],
+                                          SizedBox(height: 8),
+                                          Text(
+                                            "Text\nReader",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(width: 16),
-                              Expanded(
-                                child: Container(
-                                  height: 110,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF234462),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: GestureDetector(
-                                    // Add GestureDetector here
-                                    onTap: () {
-                                      // Check if cameras are available before navigating
-                                      if (widget.cameras.isNotEmpty) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder:
-                                                (context) => ObjectDetection(
-                                                  cameras: widget.cameras,
-                                                ),
-                                          ),
-                                        );
-                                      } else {
-                                        // Show error message if no cameras available
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'No cameras available on this device',
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Container(
+                                    height: 110,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF234462),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: GestureDetector(
+                                      // Add GestureDetector here
+                                      onTap: () {
+                                        // Check if cameras are available before navigating
+                                        if (widget.cameras.isNotEmpty) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (context) => ObjectDetection(
+                                                    cameras: widget.cameras,
+                                                  ),
                                             ),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.search,
-                                          color: Colors.white,
-                                          size: 40,
-                                        ),
-                                        SizedBox(height: 8),
-                                        Text(
-                                          "Object\nDetector",
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
+                                          );
+                                        } else {
+                                          // Show error message if no cameras available
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'No cameras available on this device',
+                                              ),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.search,
                                             color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
+                                            size: 40,
                                           ),
-                                        ),
-                                      ],
+                                          SizedBox(height: 8),
+                                          Text(
+                                            "Object\nDetector",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 32),
-                        ],
+                              ],
+                            ),
+                            SizedBox(height: 32),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
                 ),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.red,
-        onPressed: () async {
-          if (_contactPhone == null) {
+      floatingActionButton: GestureDetector(
+        onVerticalDragEnd: (details) async {
+          if (details.primaryVelocity! < 0) {
+            // Negative velocity means upward swipe
             await _pickContact();
-          } else {
-            await _callContact();
           }
         },
-        child: Icon(Icons.phone, color: Colors.white),
-        tooltip: _contactPhone == null ? 'Add Contact' : 'Call Contact',
+        onDoubleTap: () async {
+          await _callContact();
+        },
+        onLongPress: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '• Swipe UP to add contact\n• Double tap to call\n• Hold to see this help',
+              ),
+              backgroundColor: Color(0xFF234462),
+              duration: Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        },
+        child: FloatingActionButton(
+          backgroundColor: Colors.red,
+          onPressed: () {}, // Disable default press
+          child: Icon(Icons.phone, color: Colors.white),
+          tooltip: 'Swipe Up to add contact\nDouble tap to call\nHold for help',
+        ),
       ),
     );
   }

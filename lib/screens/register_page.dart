@@ -43,7 +43,7 @@ class _RegisterPageState extends State<RegisterPage> {
               Center(
                 child: Column(
                   children: [
-                    Image.asset('assets/images/logo.png', height: 250),
+                    Image.asset('assets/images/logo.png', height: 150),
                   ],
                 ),
               ),
@@ -208,18 +208,31 @@ class _RegisterPageState extends State<RegisterPage> {
                       }
 
                       try {
+                        // Store the credentials before clearing
+                        final email = _emailController.text;
+                        final username = _usernameController.text;
+
                         await AuthServices().signup(
-                          email: _emailController.text,
+                          email: email,
                           password: _passwordController.text,
-                          username: _usernameController.text,
+                          username: username,
                         );
 
-                        // Show success dialog
+                        // Clear fields immediately after successful signup
+                        if (mounted) {
+                          setState(() {
+                            _usernameController.clear();
+                            _emailController.clear();
+                            _passwordController.clear();
+                            _confirmPasswordController.clear();
+                          });
+                        }
+
+                        // Then show the success dialog
                         if (!mounted) return;
                         await showDialog(
                           context: context,
-                          barrierDismissible:
-                              false, // User must click button to close
+                          barrierDismissible: false,
                           builder: (BuildContext context) {
                             return AlertDialog(
                               shape: RoundedRectangleBorder(
@@ -259,9 +272,10 @@ class _RegisterPageState extends State<RegisterPage> {
                                           builder:
                                               (context) => HomePage(
                                                 cameras: cameras,
-                                                email: _emailController.text,
+                                                email:
+                                                    email, // Use stored email
                                                 username:
-                                                    _usernameController.text,
+                                                    username, // Use stored username
                                               ),
                                         ),
                                       );
