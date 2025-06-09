@@ -17,6 +17,9 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _confirmPasswordController =
       TextEditingController();
 
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
   @override
   void dispose() {
     _usernameController.dispose();
@@ -119,12 +122,24 @@ class _RegisterPageState extends State<RegisterPage> {
                   width: 700,
                   child: TextField(
                     controller: _passwordController,
-                    obscureText: true,
+                    obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       hintText: 'Password',
                       prefixIcon: Icon(Icons.lock_outline),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
                       ),
                     ),
                   ),
@@ -136,12 +151,24 @@ class _RegisterPageState extends State<RegisterPage> {
                   width: 700,
                   child: TextField(
                     controller: _confirmPasswordController,
-                    obscureText: true,
+                    obscureText: _obscureConfirmPassword,
                     decoration: InputDecoration(
                       hintText: 'Confirm Password',
                       prefixIcon: Icon(Icons.lock_outline),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                          });
+                        },
                       ),
                     ),
                   ),
@@ -167,7 +194,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           password: _passwordController.text,
                           username: _usernameController.text,
                         );
-                        // If signup succeeds, show success dialog
+                        print('Registration successful, showing dialog');
                         await showDialog(
                           context: context,
                           builder:
@@ -197,25 +224,13 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                         );
                       } catch (e) {
-                        // Show error dialog for any error, including email already in use
-                        String errorMsg =
-                            e.toString().contains('email-already-in-use')
-                                ? 'This email is already registered. Please use another email or login.'
-                                : 'Registration failed: ${e.toString()}';
-                        await showDialog(
-                          context: context,
-                          builder:
-                              (context) => AlertDialog(
-                                title: Text('Registration Failed'),
-                                content: Text(errorMsg),
-                                actions: [
-                                  TextButton(
-                                    onPressed:
-                                        () => Navigator.of(context).pop(),
-                                    child: Text('OK'),
-                                  ),
-                                ],
-                              ),
+                        print('Registration failed: $e');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Registration failed: ${e.toString()}',
+                            ),
+                          ),
                         );
                       }
                     },
