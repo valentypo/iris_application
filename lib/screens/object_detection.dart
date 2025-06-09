@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_tts/flutter_tts.dart'; // Add this import for TTS
 
 class ObjectDetection extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -15,46 +16,48 @@ class ObjectDetection extends StatefulWidget {
   State<ObjectDetection> createState() => _ObjectDetectionState();
 }
 
-class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingObserver {
+class _ObjectDetectionState extends State<ObjectDetection>
+    with WidgetsBindingObserver {
   CameraController? _cameraController;
   Future<void>? _initializeControllerFuture;
   bool _isCameraInitialized = false;
   bool _isProcessing = false;
-  
+
   CameraDescription? _currentCamera;
   CameraDescription? _frontCamera;
   CameraDescription? _backCamera;
-  
+
   String result = "Initializing...";
   File? _imageFile;
   List<DetectedObject> _detectedObjects = [];
   Size? _imageSize;
   final ImagePicker _picker = ImagePicker();
-  
+
   // Zoom state
   double _currentZoomLevel = 1.0;
   double _minZoomLevel = 1.0;
   double _maxZoomLevel = 1.0;
   double _baseZoomLevel = 1.0;
-  
+
   // Flash state
   FlashMode _currentFlashMode = FlashMode.off;
   final List<FlashMode> _flashModes = [
     FlashMode.off,
     FlashMode.auto,
-    FlashMode.always
+    FlashMode.always,
   ];
   int _currentFlashModeIndex = 0;
-  
+
   // Focus state
   Offset? _focusPoint;
   Timer? _focusPointTimer;
-  
+
   // Key for the preview container
   final GlobalKey _previewContainerKey = GlobalKey();
-  
+
   // For draggable sheet
-  DraggableScrollableController _dragController = DraggableScrollableController();
+  DraggableScrollableController _dragController =
+      DraggableScrollableController();
   double _initialChildSize = 0.3;
   double _minChildSize = 0.3;
   double _maxChildSize = 0.8;
@@ -63,12 +66,59 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
   // Change this to your computer's IP address when testing on physical device
   static const String baseUrl = 'http://172.20.10.5:5000';
 
+  // TTS variables
+  late FlutterTts _flutterTts;
+  bool _isSpeaking = false;
+  String _detectedLanguage = 'en';
+  String _selectedLanguage = 'auto'; // 'auto', 'en', or 'id'
+  Map<String, String> _languageNames = {
+    'auto': 'Auto',
+    'en': 'English',
+    'id': 'Bahasa',
+  };
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _initializeTts();
     _initializeApp();
+  }
+
+  void _initializeTts() {
+    _flutterTts = FlutterTts();
+
+    // Configure TTS
+    _flutterTts.setStartHandler(() {
+      setState(() {
+        _isSpeaking = true;
+      });
+    });
+
+    _flutterTts.setCompletionHandler(() {
+      setState(() {
+        _isSpeaking = false;
+      });
+    });
+
+    _flutterTts.setCancelHandler(() {
+      setState(() {
+        _isSpeaking = false;
+      });
+    });
+
+    _flutterTts.setErrorHandler((msg) {
+      setState(() {
+        _isSpeaking = false;
+      });
+      print("TTS Error: $msg");
+    });
+
+    // Set default properties
+    _flutterTts.setPitch(1.0);
+    _flutterTts.setSpeechRate(0.5);
+    _flutterTts.setVolume(1.0);
   }
 
   Future<void> _initializeApp() async {
@@ -98,9 +148,9 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
         result = "Connecting to YOLO backend...";
       });
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/health'),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(Uri.parse('$baseUrl/health'))
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         setState(() {
@@ -108,12 +158,14 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
         });
       } else {
         setState(() {
-          result = "Backend connection failed. Check if Python server is running.";
+          result =
+              "Backend connection failed. Check if Python server is running.";
         });
       }
     } catch (e) {
       setState(() {
-        result = "Cannot connect to backend. Make sure Python server is running.";
+        result =
+            "Cannot connect to backend. Make sure Python server is running.";
       });
       print("Backend connection error: $e");
     }
@@ -123,7 +175,7 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
     if (_cameraController != null) {
       await _cameraController!.dispose();
     }
-    
+
     _cameraController = CameraController(
       cameraDescription,
       ResolutionPreset.high,
@@ -167,6 +219,7 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
     WidgetsBinding.instance.removeObserver(this);
     _focusPointTimer?.cancel();
     _cameraController?.dispose();
+    _flutterTts.stop();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _dragController.dispose();
     super.dispose();
@@ -193,7 +246,8 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
   void _flipCamera() {
     if (_isProcessing || _frontCamera == null || _backCamera == null) return;
     final newCamera =
-        (_cameraController!.description.lensDirection == CameraLensDirection.back)
+        (_cameraController!.description.lensDirection ==
+                CameraLensDirection.back)
             ? _frontCamera!
             : _backCamera!;
     _initializeCamera(newCamera);
@@ -224,14 +278,14 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
         _cameraController!.value.isTakingPicture) {
       return;
     }
-    
+
     setState(() => _isProcessing = true);
     try {
       // Ensure flash mode is set
       await _cameraController!.setFlashMode(_currentFlashMode);
       // Ensure zoom level is set
       await _cameraController!.setZoomLevel(_currentZoomLevel);
-      
+
       final XFile picture = await _cameraController!.takePicture();
       _imageFile = File(picture.path);
       await _processImage();
@@ -244,6 +298,143 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
     }
   }
 
+  String _getDetectedObjectsText() {
+    if (_detectedObjects.isEmpty) {
+      return "No objects detected";
+    }
+
+    // Create a readable text from detected objects
+    String text =
+        "I detected ${_detectedObjects.length} object${_detectedObjects.length > 1 ? 's' : ''}: ";
+
+    // Group objects by label and count
+    Map<String, int> objectCounts = {};
+    for (var obj in _detectedObjects) {
+      objectCounts[obj.label] = (objectCounts[obj.label] ?? 0) + 1;
+    }
+
+    // Build the text
+    List<String> objectDescriptions = [];
+    objectCounts.forEach((label, count) {
+      if (count > 1) {
+        objectDescriptions.add("$count ${label}s");
+      } else {
+        objectDescriptions.add("$count $label");
+      }
+    });
+
+    text += objectDescriptions.join(", ");
+    return text;
+  }
+
+  Future<void> _speakText() async {
+    String textToSpeak = _getDetectedObjectsText();
+
+    if (textToSpeak.isEmpty ||
+        textToSpeak == "No objects detected" && _detectedObjects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No objects detected to speak'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_isSpeaking) {
+      await _flutterTts.stop();
+      setState(() {
+        _isSpeaking = false;
+      });
+    } else {
+      // Determine which language to use
+      String languageToUse =
+          _selectedLanguage == 'auto'
+              ? _detectedLanguage
+              : (_selectedLanguage == 'id' ? 'id-ID' : 'en-US');
+
+      // Set language based on user selection or detected language
+      await _flutterTts.setLanguage(languageToUse);
+
+      // Speak the text
+      var result = await _flutterTts.speak(textToSpeak);
+      if (result == 1) {
+        setState(() {
+          _isSpeaking = true;
+        });
+      }
+    }
+  }
+
+  void _showLanguageMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Select Language',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ..._languageNames.entries.map((entry) {
+                bool isSelected = _selectedLanguage == entry.key;
+                return ListTile(
+                  leading: Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: isSelected ? Colors.blue : Colors.grey,
+                  ),
+                  title: Text(
+                    entry.value,
+                    style: TextStyle(
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Colors.blue : Colors.black,
+                    ),
+                  ),
+                  subtitle:
+                      entry.key == 'auto'
+                          ? Text(
+                            'Detected: ${_detectedLanguage == 'id' ? 'Bahasa Indonesia' : 'English'}',
+                            style: const TextStyle(fontSize: 12),
+                          )
+                          : null,
+                  onTap: () {
+                    setState(() {
+                      _selectedLanguage = entry.key;
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _processImage() async {
     if (_imageFile == null) return;
 
@@ -252,30 +443,39 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
       result = "Analyzing image...";
       _detectedObjects = [];
       _showDraggable = true;
+      _isSpeaking = false;
     });
+    _flutterTts.stop();
 
     try {
       // Get image dimensions
-      final decodedImage = await decodeImageFromList(await _imageFile!.readAsBytes());
-      _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+      final decodedImage = await decodeImageFromList(
+        await _imageFile!.readAsBytes(),
+      );
+      _imageSize = Size(
+        decodedImage.width.toDouble(),
+        decodedImage.height.toDouble(),
+      );
 
       // Convert image to base64
       final bytes = await _imageFile!.readAsBytes();
       final base64Image = base64Encode(bytes);
 
       // Send to backend
-      final response = await http.post(
-        Uri.parse('$baseUrl/detect'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'image': base64Image}),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/detect'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'image': base64Image}),
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         if (data['success'] == true) {
           List<DetectedObject> detectedObjects = [];
-          
+
           for (var detection in data['detections']) {
             final bbox = detection['bbox'] as List;
             final rect = Rect.fromLTRB(
@@ -285,11 +485,13 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
               bbox[3].toDouble(),
             );
 
-            detectedObjects.add(DetectedObject(
-              boundingBox: rect,
-              label: detection['class'],
-              confidence: detection['confidence'].toDouble(),
-            ));
+            detectedObjects.add(
+              DetectedObject(
+                boundingBox: rect,
+                label: detection['class'],
+                confidence: detection['confidence'].toDouble(),
+              ),
+            );
           }
 
           setState(() {
@@ -334,7 +536,9 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
       _detectedObjects = [];
       result = "Tap the button to detect objects";
       _showDraggable = false;
+      _isSpeaking = false;
     });
+    _flutterTts.stop();
     _dragController.animateTo(
       _minChildSize,
       duration: Duration(milliseconds: 300),
@@ -348,9 +552,12 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
   }
 
   Future<void> _handleScaleUpdate(ScaleUpdateDetails details) async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
-    double newZoomLevel =
-        (_baseZoomLevel * details.scale).clamp(_minZoomLevel, _maxZoomLevel);
+    if (_cameraController == null || !_cameraController!.value.isInitialized)
+      return;
+    double newZoomLevel = (_baseZoomLevel * details.scale).clamp(
+      _minZoomLevel,
+      _maxZoomLevel,
+    );
     if (newZoomLevel != _currentZoomLevel) {
       await _cameraController!.setZoomLevel(newZoomLevel);
       if (mounted) setState(() => _currentZoomLevel = newZoomLevel);
@@ -374,7 +581,8 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
   }
 
   void _toggleFlashMode() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized)
+      return;
     _currentFlashModeIndex = (_currentFlashModeIndex + 1) % _flashModes.length;
     _currentFlashMode = _flashModes[_currentFlashModeIndex];
     try {
@@ -388,7 +596,8 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
 
   // --- Focus ---
   Future<void> _handleTapToFocus(TapUpDetails details) async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized)
+      return;
 
     final RenderBox? previewBox =
         _previewContainerKey.currentContext?.findRenderObject() as RenderBox?;
@@ -422,7 +631,9 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
 
   Widget _buildCameraPreview(BuildContext context) {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
 
     return ClipRect(
@@ -432,7 +643,9 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
           fit: BoxFit.cover,
           child: SizedBox(
             width: MediaQuery.of(context).size.width,
-            height: MediaQuery.of(context).size.width * _cameraController!.value.aspectRatio,
+            height:
+                MediaQuery.of(context).size.width *
+                _cameraController!.value.aspectRatio,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -477,45 +690,47 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
         children: [
           // Full screen camera preview or image
           Positioned.fill(
-            child: _imageFile != null
-                ? Image.file(
-                    _imageFile!,
-                    fit: BoxFit.contain,
-                  )
-                : FutureBuilder<void>(
-                    future: _initializeControllerFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done &&
-                          _isCameraInitialized) {
-                        return _buildCameraPreview(context);
-                      } else if (snapshot.hasError) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              "Error loading camera: ${snapshot.error}",
-                              style: const TextStyle(color: Colors.white),
-                              textAlign: TextAlign.center,
+            child:
+                _imageFile != null
+                    ? Image.file(_imageFile!, fit: BoxFit.contain)
+                    : FutureBuilder<void>(
+                      future: _initializeControllerFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.done &&
+                            _isCameraInitialized) {
+                          return _buildCameraPreview(context);
+                        } else if (snapshot.hasError) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Text(
+                                "Error loading camera: ${snapshot.error}",
+                                style: const TextStyle(color: Colors.white),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
-                          ),
+                          );
+                        }
+                        return const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
                         );
-                      }
-                      return const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      );
-                    },
-                  ),
+                      },
+                    ),
           ),
 
           // Bounding boxes overlay
-          if (_imageFile != null && _detectedObjects.isNotEmpty && _imageSize != null)
+          if (_imageFile != null &&
+              _detectedObjects.isNotEmpty &&
+              _imageSize != null)
             Positioned.fill(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final widthRatio = constraints.maxWidth / _imageSize!.width;
-                  final heightRatio = constraints.maxHeight / _imageSize!.height;
-                  final scale = widthRatio < heightRatio ? widthRatio : heightRatio;
-                  
+                  final heightRatio =
+                      constraints.maxHeight / _imageSize!.height;
+                  final scale =
+                      widthRatio < heightRatio ? widthRatio : heightRatio;
+
                   return CustomPaint(
                     painter: ObjectDetectorPainter(
                       _detectedObjects,
@@ -558,8 +773,11 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: Icon(_getFlashIcon(),
-                          color: Colors.white, size: 24),
+                      icon: Icon(
+                        _getFlashIcon(),
+                        color: Colors.white,
+                        size: 24,
+                      ),
                       onPressed: _isProcessing ? null : _toggleFlashMode,
                       tooltip: 'Toggle Flash',
                     ),
@@ -572,7 +790,11 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.refresh, size: 24, color: Colors.white),
+                      icon: const Icon(
+                        Icons.refresh,
+                        size: 24,
+                        color: Colors.white,
+                      ),
                       onPressed: _resetDetection,
                     ),
                   ),
@@ -581,14 +803,19 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
           ),
 
           // Zoom Level Indicator
-          if (_isCameraInitialized && _currentZoomLevel > 1.01 && _imageFile == null)
+          if (_isCameraInitialized &&
+              _currentZoomLevel > 1.01 &&
+              _imageFile == null)
             Positioned(
               top: MediaQuery.of(context).padding.top + 80,
               left: 0,
               right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(10),
@@ -603,7 +830,9 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
 
           // Bottom controls
           Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + (_imageFile != null ? 120 : 50),
+            bottom:
+                MediaQuery.of(context).padding.bottom +
+                (_imageFile != null ? 120 : 50),
             left: 0,
             right: 0,
             child: Padding(
@@ -618,17 +847,32 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 2,
+                      ),
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.photo_library, size: 24, color: Colors.white),
-                      onPressed: (_isProcessing || !_isCameraInitialized) ? null : _pickImageFromGallery,
+                      icon: const Icon(
+                        Icons.photo_library,
+                        size: 24,
+                        color: Colors.white,
+                      ),
+                      onPressed:
+                          (_isProcessing || !_isCameraInitialized)
+                              ? null
+                              : _pickImageFromGallery,
                     ),
                   ),
                   const SizedBox(width: 50),
                   // Capture button
                   GestureDetector(
-                    onTap: (_isProcessing || !_isCameraInitialized || _imageFile != null) ? null : _takePicture,
+                    onTap:
+                        (_isProcessing ||
+                                !_isCameraInitialized ||
+                                _imageFile != null)
+                            ? null
+                            : _takePicture,
                     child: Container(
                       width: 80,
                       height: 80,
@@ -645,19 +889,20 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
                         ],
                       ),
                       child: Center(
-                        child: _isProcessing
-                            ? const CircularProgressIndicator(
-                                color: Colors.black,
-                                strokeWidth: 3,
-                              )
-                            : Container(
-                                width: 65,
-                                height: 65,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
+                        child:
+                            _isProcessing
+                                ? const CircularProgressIndicator(
+                                  color: Colors.black,
+                                  strokeWidth: 3,
+                                )
+                                : Container(
+                                  width: 65,
+                                  height: 65,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
-                              ),
                       ),
                     ),
                   ),
@@ -670,16 +915,24 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.5),
+                          width: 2,
+                        ),
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.flip_camera_ios_outlined, size: 24, color: Colors.white),
-                        onPressed: (_isProcessing ||
-                                !_isCameraInitialized ||
-                                _frontCamera == null ||
-                                _backCamera == null)
-                            ? null
-                            : _flipCamera,
+                        icon: const Icon(
+                          Icons.flip_camera_ios_outlined,
+                          size: 24,
+                          color: Colors.white,
+                        ),
+                        onPressed:
+                            (_isProcessing ||
+                                    !_isCameraInitialized ||
+                                    _frontCamera == null ||
+                                    _backCamera == null)
+                                ? null
+                                : _flipCamera,
                       ),
                     )
                   else
@@ -752,36 +1005,157 @@ class _ObjectDetectionState extends State<ObjectDetection> with WidgetsBindingOb
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                ..._detectedObjects.map((obj) => Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.yellow.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.yellow.withOpacity(0.3)),
+                                ..._detectedObjects.map(
+                                  (obj) => Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.yellow.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.yellow.withOpacity(0.3),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          obj.label,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                        Text(
+                                          "${(obj.confidence * 100).toStringAsFixed(1)}%",
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        obj.label,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.black87,
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                // Text-to-Speech controls
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // TTS button
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Colors.blue.shade400,
+                                            Colors.blue.shade600,
+                                          ],
+                                        ),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.blue.withOpacity(0.3),
+                                            blurRadius: 15,
+                                            spreadRadius: 2,
+                                            offset: const Offset(0, 5),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: _speakText,
+                                          borderRadius: BorderRadius.circular(
+                                            40,
+                                          ),
+                                          child: Center(
+                                            child: Icon(
+                                              _isSpeaking
+                                                  ? Icons.stop_rounded
+                                                  : Icons.volume_up_rounded,
+                                              size: 30,
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                      Text(
-                                        "${(obj.confidence * 100).toStringAsFixed(1)}%",
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.black54,
+                                    ),
+                                    const SizedBox(width: 25),
+                                    // Language selector button
+                                    Container(
+                                      height: 60,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(30),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
                                         ),
                                       ),
-                                    ],
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: _showLanguageMenu,
+                                          borderRadius: BorderRadius.circular(
+                                            30,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.language,
+                                                size: 24,
+                                                color: Colors.grey[700],
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _languageNames[_selectedLanguage]!,
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.grey[800],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Icon(
+                                                Icons.arrow_drop_down,
+                                                size: 24,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                Center(
+                                  child: Text(
+                                    _isSpeaking
+                                        ? 'Stop Reading'
+                                        : 'Read Objects',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[700],
+                                    ),
                                   ),
-                                )),
+                                ),
                               ],
+
+                              // Add some bottom padding
+                              const SizedBox(height: 20),
                             ],
                           ),
                         ),
@@ -815,17 +1189,22 @@ class ObjectDetectorPainter extends CustomPainter {
   final Size imageSize;
   final Size canvasSize;
 
-  ObjectDetectorPainter(this.objects, this.scale, this.imageSize, this.canvasSize);
+  ObjectDetectorPainter(
+    this.objects,
+    this.scale,
+    this.imageSize,
+    this.canvasSize,
+  );
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint boxPaint = Paint()
-      ..color = Colors.yellow
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
+    final Paint boxPaint =
+        Paint()
+          ..color = Colors.yellow
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3;
 
-    final Paint bgPaint = Paint()
-      ..color = Colors.yellow.withOpacity(0.3);
+    final Paint bgPaint = Paint()..color = Colors.yellow.withOpacity(0.3);
 
     // Calculate offsets to center the image
     final scaledWidth = imageSize.width * scale;
@@ -873,7 +1252,7 @@ class ObjectDetectorPainter extends CustomPainter {
         const Radius.circular(6),
       );
       canvas.drawRRect(roundedRect, bgPaint);
-      
+
       textPainter.paint(
         canvas,
         Offset(scaledRect.left + 6, scaledRect.top - textPainter.height - 4),
