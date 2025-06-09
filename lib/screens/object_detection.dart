@@ -1,12 +1,14 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_tts/flutter_tts.dart'; // Add this import for TTS
+import 'package:starflut/starflut.dart'; // For Python integration
 
 class ObjectDetection extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -31,7 +33,7 @@ class _ObjectDetectionState extends State<ObjectDetection>
   File? _imageFile;
   List<DetectedObject> _detectedObjects = [];
   Size? _imageSize;
-  final ImagePicker _picker = ImagePicker();
+  final ImagePicker _picker = Image.new();
 
   // Zoom state
   double _currentZoomLevel = 1.0;
@@ -56,26 +58,37 @@ class _ObjectDetectionState extends State<ObjectDetection>
   final GlobalKey _previewContainerKey = GlobalKey();
 
   // For draggable sheet
-  DraggableScrollableController _dragController =
+  final DraggableScrollableController _dragController =
       DraggableScrollableController();
-  double _initialChildSize = 0.3;
-  double _minChildSize = 0.3;
-  double _maxChildSize = 0.8;
+  final double _initialChildSize = 0.3;
+  final double _minChildSize = 0.3;
+  final double _maxChildSize = 0.8;
   bool _showDraggable = false;
 
-  // Change this to your computer's IP address when testing on physical device
-  static const String baseUrl = 'http://172.20.10.5:5000';
+  // For Python integration
+  Starflut? _starflut;
+  bool _isBackendReady = false;
+
+  // CHANGE THIS to localhost to use the integrated Python server
+  static const String baseUrl = 'http://127.0.0.1:5000';
 
   // TTS variables
   late FlutterTts _flutterTts;
   bool _isSpeaking = false;
   String _detectedLanguage = 'en';
   String _selectedLanguage = 'auto'; // 'auto', 'en', or 'id'
-  Map<String, String> _languageNames = {
+  final Map<String, String> _languageNames = {
     'auto': 'Auto',
     'en': 'English',
     'id': 'Bahasa',
   };
+
+  // Text formatting state variables
+  bool _isTextBold = false;
+  double _currentFontSize = 15.0;
+  static const double _minFontSize = 10.0;
+  static const double _maxFontSize = 30.0;
+  static const double _fontSizeStep = 1.0;
 
   @override
   void initState() {
@@ -89,42 +102,68 @@ class _ObjectDetectionState extends State<ObjectDetection>
   void _initializeTts() {
     _flutterTts = FlutterTts();
 
-    // Configure TTS
-    _flutterTts.setStartHandler(() {
-      setState(() {
-        _isSpeaking = true;
-      });
-    });
-
-    _flutterTts.setCompletionHandler(() {
-      setState(() {
-        _isSpeaking = false;
-      });
-    });
-
-    _flutterTts.setCancelHandler(() {
-      setState(() {
-        _isSpeaking = false;
-      });
-    });
-
+    _flutterTts.setStartHandler(() => setState(() => _isSpeaking = true));
+    _flutterTts.setCompletionHandler(() => setState(() => _isSpeaking = false));
+    _flutterTts.setCancelHandler(() => setState(() => _isSpeaking = false));
     _flutterTts.setErrorHandler((msg) {
-      setState(() {
-        _isSpeaking = false;
-      });
+      setState(() => _isSpeaking = false);
       print("TTS Error: $msg");
     });
 
-    // Set default properties
     _flutterTts.setPitch(1.0);
     _flutterTts.setSpeechRate(0.5);
     _flutterTts.setVolume(1.0);
   }
 
   Future<void> _initializeApp() async {
-    await _checkBackendConnection();
+    // This now starts the local Python server
+    await _initializeAndStartPythonServer();
+
     if (widget.cameras.isNotEmpty) {
       _setupCamerasAndInitialize();
+    }
+  }
+
+  Future<void> _initializeAndStartPythonServer() async {
+    setState(() {
+      result = "Initializing Python backend...";
+    });
+
+    try {
+      // Get the path to the bundled Python script
+      final String appPy = await rootBundle.loadString('assets/python/app.py');
+
+      // Initialize Starflut
+      _starflut = await Starflut.newStarflut();
+
+      // Get the path for the model in the app's private directory
+      // This makes the model file accessible to the Python script
+      final String modelPath = await Starflut.getResourcePath("yolo11n.pt");
+
+      // Run the Python script's main function, passing the model path
+      // This will start the Flask server in the background
+      await _starflut?.run(
+        appPy,
+        namedArgs: {"model_path": modelPath},
+        function: "main",
+      );
+
+      // Give the server a moment to start up before checking its health
+      await Future.delayed(const Duration(seconds: 5));
+
+      setState(() {
+        _isBackendReady = true;
+      });
+
+      // After starting, check its health
+      await _checkBackendConnection();
+    } catch (e) {
+      print("Failed to initialize Python backend: $e");
+      if (mounted) {
+        setState(() {
+          result = "Error: Could not start local server.";
+        });
+      }
     }
   }
 
@@ -143,9 +182,13 @@ class _ObjectDetectionState extends State<ObjectDetection>
   }
 
   Future<void> _checkBackendConnection() async {
+    if (!_isBackendReady) {
+      setState(() => result = "Backend is not ready. Please wait.");
+      return;
+    }
     try {
       setState(() {
-        result = "Connecting to YOLO backend...";
+        result = "Connecting to local YOLO backend...";
       });
 
       final response = await http
@@ -158,14 +201,12 @@ class _ObjectDetectionState extends State<ObjectDetection>
         });
       } else {
         setState(() {
-          result =
-              "Backend connection failed. Check if Python server is running.";
+          result = "Local backend failed. Status: ${response.statusCode}";
         });
       }
     } catch (e) {
       setState(() {
-        result =
-            "Cannot connect to backend. Make sure Python server is running.";
+        result = "Cannot connect to local backend. Retrying...";
       });
       print("Backend connection error: $e");
     }
@@ -192,11 +233,8 @@ class _ObjectDetectionState extends State<ObjectDetection>
       await _initializeControllerFuture;
       if (!mounted) return;
 
-      // Fetch zoom levels
       _minZoomLevel = await _cameraController!.getMinZoomLevel();
       _maxZoomLevel = await _cameraController!.getMaxZoomLevel();
-
-      // Set initial flash mode
       await _cameraController!.setFlashMode(_currentFlashMode);
 
       setState(() {
@@ -220,6 +258,7 @@ class _ObjectDetectionState extends State<ObjectDetection>
     _focusPointTimer?.cancel();
     _cameraController?.dispose();
     _flutterTts.stop();
+    _starflut?.dispose(); // Dispose starflut instance
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _dragController.dispose();
     super.dispose();
@@ -228,16 +267,14 @@ class _ObjectDetectionState extends State<ObjectDetection>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final CameraController? cameraController = _cameraController;
-    if (cameraController == null ||
-        !cameraController.value.isInitialized ||
-        _currentCamera == null) {
+    if (cameraController == null || !cameraController.value.isInitialized) {
       return;
     }
     if (state == AppLifecycleState.inactive) {
       cameraController.dispose();
       if (mounted) setState(() => _isCameraInitialized = false);
     } else if (state == AppLifecycleState.resumed) {
-      if (!_isCameraInitialized) {
+      if (_currentCamera != null) {
         _initializeCamera(_currentCamera!);
       }
     }
@@ -281,9 +318,7 @@ class _ObjectDetectionState extends State<ObjectDetection>
 
     setState(() => _isProcessing = true);
     try {
-      // Ensure flash mode is set
       await _cameraController!.setFlashMode(_currentFlashMode);
-      // Ensure zoom level is set
       await _cameraController!.setZoomLevel(_currentZoomLevel);
 
       final XFile picture = await _cameraController!.takePicture();
@@ -302,67 +337,37 @@ class _ObjectDetectionState extends State<ObjectDetection>
     if (_detectedObjects.isEmpty) {
       return "No objects detected";
     }
-
-    // Create a readable text from detected objects
     String text =
         "I detected ${_detectedObjects.length} object${_detectedObjects.length > 1 ? 's' : ''}: ";
-
-    // Group objects by label and count
     Map<String, int> objectCounts = {};
     for (var obj in _detectedObjects) {
       objectCounts[obj.label] = (objectCounts[obj.label] ?? 0) + 1;
     }
-
-    // Build the text
     List<String> objectDescriptions = [];
     objectCounts.forEach((label, count) {
-      if (count > 1) {
-        objectDescriptions.add("$count ${label}s");
-      } else {
-        objectDescriptions.add("$count $label");
-      }
+      objectDescriptions.add("$count $label${count > 1 ? 's' : ''}");
     });
-
     text += objectDescriptions.join(", ");
     return text;
   }
 
   Future<void> _speakText() async {
     String textToSpeak = _getDetectedObjectsText();
-
-    if (textToSpeak.isEmpty ||
-        textToSpeak == "No objects detected" && _detectedObjects.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No objects detected to speak'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+    if (textToSpeak.isEmpty || textToSpeak == "No objects detected") {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No objects to speak')));
       return;
     }
-
     if (_isSpeaking) {
       await _flutterTts.stop();
-      setState(() {
-        _isSpeaking = false;
-      });
     } else {
-      // Determine which language to use
       String languageToUse =
           _selectedLanguage == 'auto'
               ? _detectedLanguage
               : (_selectedLanguage == 'id' ? 'id-ID' : 'en-US');
-
-      // Set language based on user selection or detected language
       await _flutterTts.setLanguage(languageToUse);
-
-      // Speak the text
-      var result = await _flutterTts.speak(textToSpeak);
-      if (result == 1) {
-        setState(() {
-          _isSpeaking = true;
-        });
-      }
+      await _flutterTts.speak(textToSpeak);
     }
   }
 
@@ -416,13 +421,10 @@ class _ObjectDetectionState extends State<ObjectDetection>
                       entry.key == 'auto'
                           ? Text(
                             'Detected: ${_detectedLanguage == 'id' ? 'Bahasa Indonesia' : 'English'}',
-                            style: const TextStyle(fontSize: 12),
                           )
                           : null,
                   onTap: () {
-                    setState(() {
-                      _selectedLanguage = entry.key;
-                    });
+                    setState(() => _selectedLanguage = entry.key);
                     Navigator.pop(context);
                   },
                 );
@@ -443,12 +445,10 @@ class _ObjectDetectionState extends State<ObjectDetection>
       result = "Analyzing image...";
       _detectedObjects = [];
       _showDraggable = true;
-      _isSpeaking = false;
     });
-    _flutterTts.stop();
+    if (_isSpeaking) _flutterTts.stop();
 
     try {
-      // Get image dimensions
       final decodedImage = await decodeImageFromList(
         await _imageFile!.readAsBytes(),
       );
@@ -457,76 +457,63 @@ class _ObjectDetectionState extends State<ObjectDetection>
         decodedImage.height.toDouble(),
       );
 
-      // Convert image to base64
       final bytes = await _imageFile!.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      // Send to backend
       final response = await http
           .post(
             Uri.parse('$baseUrl/detect'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'image': base64Image}),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(
+            const Duration(seconds: 90),
+          ); // Increased timeout for on-device processing
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
         if (data['success'] == true) {
-          List<DetectedObject> detectedObjects = [];
-
-          for (var detection in data['detections']) {
-            final bbox = detection['bbox'] as List;
-            final rect = Rect.fromLTRB(
-              bbox[0].toDouble(),
-              bbox[1].toDouble(),
-              bbox[2].toDouble(),
-              bbox[3].toDouble(),
-            );
-
-            detectedObjects.add(
-              DetectedObject(
-                boundingBox: rect,
-                label: detection['class'],
-                confidence: detection['confidence'].toDouble(),
-              ),
-            );
-          }
+          List<DetectedObject> detectedObjects =
+              (data['detections'] as List).map((detection) {
+                final bbox = detection['bbox'] as List;
+                return DetectedObject(
+                  boundingBox: Rect.fromLTRB(
+                    bbox[0].toDouble(),
+                    bbox[1].toDouble(),
+                    bbox[2].toDouble(),
+                    bbox[3].toDouble(),
+                  ),
+                  label: detection['class'],
+                  confidence: detection['confidence'].toDouble(),
+                );
+              }).toList();
 
           setState(() {
             _detectedObjects = detectedObjects;
             if (detectedObjects.isEmpty) {
-              result = "No objects detected. Try different angle or lighting.";
+              result =
+                  "No objects detected. Try a different angle or lighting.";
             } else {
               result = "Found ${detectedObjects.length} object(s)";
-              // Expand the sheet when objects are detected
               _dragController.animateTo(
                 0.5,
-                duration: Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOut,
               );
             }
           });
         } else {
-          setState(() {
-            result = "Detection failed: ${data['error']}";
-          });
+          setState(() => result = "Detection failed: ${data['error']}");
         }
       } else {
-        setState(() {
-          result = "Server error: ${response.statusCode}";
-        });
+        setState(() => result = "Server error: ${response.statusCode}");
       }
     } catch (e) {
-      setState(() {
-        result = "Detection failed: $e";
-      });
+      setState(() => result = "Detection failed: $e");
       print("Detection error: $e");
     } finally {
-      setState(() {
-        _isProcessing = false;
-      });
+      setState(() => _isProcessing = false);
     }
   }
 
@@ -536,24 +523,38 @@ class _ObjectDetectionState extends State<ObjectDetection>
       _detectedObjects = [];
       result = "Tap the button to detect objects";
       _showDraggable = false;
-      _isSpeaking = false;
+      _isTextBold = false;
+      _currentFontSize = 15.0;
     });
-    _flutterTts.stop();
+    if (_isSpeaking) _flutterTts.stop();
     _dragController.animateTo(
       _minChildSize,
-      duration: Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
   }
 
-  // --- Zoom ---
-  void _handleScaleStart(ScaleStartDetails details) {
-    _baseZoomLevel = _currentZoomLevel;
-  }
+  void _increaseFontSize() => setState(
+    () =>
+        _currentFontSize = (_currentFontSize + _fontSizeStep).clamp(
+          _minFontSize,
+          _maxFontSize,
+        ),
+  );
+  void _decreaseFontSize() => setState(
+    () =>
+        _currentFontSize = (_currentFontSize - _fontSizeStep).clamp(
+          _minFontSize,
+          _maxFontSize,
+        ),
+  );
+  void _toggleBold() => setState(() => _isTextBold = !_isTextBold);
+
+  void _handleScaleStart(ScaleStartDetails details) =>
+      _baseZoomLevel = _currentZoomLevel;
 
   Future<void> _handleScaleUpdate(ScaleUpdateDetails details) async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized)
-      return;
+    if (_cameraController == null) return;
     double newZoomLevel = (_baseZoomLevel * details.scale).clamp(
       _minZoomLevel,
       _maxZoomLevel,
@@ -564,7 +565,6 @@ class _ObjectDetectionState extends State<ObjectDetection>
     }
   }
 
-  // --- Flash ---
   IconData _getFlashIcon() {
     switch (_currentFlashMode) {
       case FlashMode.off:
@@ -575,50 +575,39 @@ class _ObjectDetectionState extends State<ObjectDetection>
         return Icons.flash_on;
       case FlashMode.torch:
         return Icons.highlight;
-      default:
-        return Icons.flash_off;
     }
   }
 
   void _toggleFlashMode() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized)
-      return;
+    if (_cameraController == null) return;
     _currentFlashModeIndex = (_currentFlashModeIndex + 1) % _flashModes.length;
     _currentFlashMode = _flashModes[_currentFlashModeIndex];
     try {
       await _cameraController!.setFlashMode(_currentFlashMode);
       if (mounted) setState(() {});
-      print("Flash mode set to: $_currentFlashMode");
     } catch (e) {
       print("Error setting flash mode: $e");
     }
   }
 
-  // --- Focus ---
   Future<void> _handleTapToFocus(TapUpDetails details) async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized)
-      return;
-
+    if (_cameraController == null) return;
     final RenderBox? previewBox =
         _previewContainerKey.currentContext?.findRenderObject() as RenderBox?;
     if (previewBox == null || !previewBox.hasSize) return;
 
     final Offset localOffset = previewBox.globalToLocal(details.globalPosition);
-
-    final double x = (localOffset.dx / previewBox.size.width).clamp(0.0, 1.0);
-    final double y = (localOffset.dy / previewBox.size.height).clamp(0.0, 1.0);
-    final Offset tapPoint = Offset(x, y);
+    final Offset tapPoint = Offset(
+      (localOffset.dx / previewBox.size.width).clamp(0.0, 1.0),
+      (localOffset.dy / previewBox.size.height).clamp(0.0, 1.0),
+    );
 
     try {
       await _cameraController!.setFocusMode(FocusMode.auto);
       await _cameraController!.setFocusPoint(tapPoint);
 
-      print("Focus point set to: $tapPoint");
-
       if (mounted) {
-        setState(() {
-          _focusPoint = localOffset;
-        });
+        setState(() => _focusPoint = localOffset);
         _focusPointTimer?.cancel();
         _focusPointTimer = Timer(const Duration(seconds: 1), () {
           if (mounted) setState(() => _focusPoint = null);
@@ -630,9 +619,20 @@ class _ObjectDetectionState extends State<ObjectDetection>
   }
 
   Widget _buildCameraPreview(BuildContext context) {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
+    if (!_isCameraInitialized) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: Colors.white),
+            const SizedBox(height: 16),
+            Text(
+              result,
+              style: const TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       );
     }
 
@@ -665,7 +665,6 @@ class _ObjectDetectionState extends State<ObjectDetection>
                       height: 60,
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.yellow, width: 2),
-                        shape: BoxShape.rectangle,
                       ),
                     ),
                   ),
@@ -696,24 +695,16 @@ class _ObjectDetectionState extends State<ObjectDetection>
                     : FutureBuilder<void>(
                       future: _initializeControllerFuture,
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.done &&
-                            _isCameraInitialized) {
+                        if (snapshot.connectionState == ConnectionState.done) {
                           return _buildCameraPreview(context);
-                        } else if (snapshot.hasError) {
+                        } else {
                           return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(
-                                "Error loading camera: ${snapshot.error}",
-                                style: const TextStyle(color: Colors.white),
-                                textAlign: TextAlign.center,
-                              ),
+                            child: Text(
+                              result,
+                              style: const TextStyle(color: Colors.white),
                             ),
                           );
                         }
-                        return const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        );
                       },
                     ),
           ),
@@ -725,12 +716,11 @@ class _ObjectDetectionState extends State<ObjectDetection>
             Positioned.fill(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final widthRatio = constraints.maxWidth / _imageSize!.width;
-                  final heightRatio =
-                      constraints.maxHeight / _imageSize!.height;
-                  final scale =
-                      widthRatio < heightRatio ? widthRatio : heightRatio;
-
+                  final double scale =
+                      (constraints.maxWidth / _imageSize!.width <
+                              constraints.maxHeight / _imageSize!.height)
+                          ? constraints.maxWidth / _imageSize!.width
+                          : constraints.maxHeight / _imageSize!.height;
                   return CustomPaint(
                     painter: ObjectDetectorPainter(
                       _detectedObjects,
@@ -743,7 +733,7 @@ class _ObjectDetectionState extends State<ObjectDetection>
               ),
             ),
 
-          // Top controls - Back button and Flash button
+          // Top controls
           Positioned(
             top: MediaQuery.of(context).padding.top + 20,
             left: 20,
@@ -751,7 +741,6 @@ class _ObjectDetectionState extends State<ObjectDetection>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Back button
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.5),
@@ -762,27 +751,17 @@ class _ObjectDetectionState extends State<ObjectDetection>
                     onPressed: _goBack,
                   ),
                 ),
-                // Flash button
-                if (_isCameraInitialized &&
-                    _cameraController != null &&
-                    _cameraController!.value.isInitialized &&
-                    _imageFile == null)
+                if (_imageFile == null)
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: Icon(
-                        _getFlashIcon(),
-                        color: Colors.white,
-                        size: 24,
-                      ),
+                      icon: Icon(_getFlashIcon(), color: Colors.white),
                       onPressed: _isProcessing ? null : _toggleFlashMode,
-                      tooltip: 'Toggle Flash',
                     ),
                   ),
-                // Reset button (when image is captured)
                 if (_imageFile != null)
                   Container(
                     decoration: BoxDecoration(
@@ -790,11 +769,7 @@ class _ObjectDetectionState extends State<ObjectDetection>
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(
-                        Icons.refresh,
-                        size: 24,
-                        color: Colors.white,
-                      ),
+                      icon: const Icon(Icons.refresh, color: Colors.white),
                       onPressed: _resetDetection,
                     ),
                   ),
@@ -838,102 +813,18 @@ class _ObjectDetectionState extends State<ObjectDetection>
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 40),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Gallery button
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.5),
-                        width: 2,
-                      ),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.photo_library,
-                        size: 24,
-                        color: Colors.white,
-                      ),
-                      onPressed:
-                          (_isProcessing || !_isCameraInitialized)
-                              ? null
-                              : _pickImageFromGallery,
-                    ),
+                  _buildControlButton(
+                    Icons.photo_library,
+                    _pickImageFromGallery,
                   ),
-                  const SizedBox(width: 50),
-                  // Capture button
-                  GestureDetector(
-                    onTap:
-                        (_isProcessing ||
-                                !_isCameraInitialized ||
-                                _imageFile != null)
-                            ? null
-                            : _takePicture,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child:
-                            _isProcessing
-                                ? const CircularProgressIndicator(
-                                  color: Colors.black,
-                                  strokeWidth: 3,
-                                )
-                                : Container(
-                                  width: 65,
-                                  height: 65,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 50),
-                  // Flip camera button (only show when camera is active)
+                  _buildCaptureButton(),
                   if (_imageFile == null)
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.5),
-                          width: 2,
-                        ),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.flip_camera_ios_outlined,
-                          size: 24,
-                          color: Colors.white,
-                        ),
-                        onPressed:
-                            (_isProcessing ||
-                                    !_isCameraInitialized ||
-                                    _frontCamera == null ||
-                                    _backCamera == null)
-                                ? null
-                                : _flipCamera,
-                      ),
+                    _buildControlButton(
+                      Icons.flip_camera_ios_outlined,
+                      _flipCamera,
                     )
                   else
                     const SizedBox(width: 60), // Placeholder for alignment
@@ -943,7 +834,7 @@ class _ObjectDetectionState extends State<ObjectDetection>
           ),
 
           // Draggable results sheet
-          if (_imageFile != null && _showDraggable)
+          if (_showDraggable)
             DraggableScrollableSheet(
               initialChildSize: _initialChildSize,
               minChildSize: _minChildSize,
@@ -966,7 +857,6 @@ class _ObjectDetectionState extends State<ObjectDetection>
                   ),
                   child: Column(
                     children: [
-                      // Handle
                       Container(
                         margin: const EdgeInsets.only(top: 12),
                         width: 40,
@@ -976,188 +866,11 @@ class _ObjectDetectionState extends State<ObjectDetection>
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      // Content
                       Expanded(
                         child: SingleChildScrollView(
                           controller: scrollController,
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_detectedObjects.isEmpty)
-                                Center(
-                                  child: Text(
-                                    result,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black87,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                )
-                              else ...[
-                                Text(
-                                  result,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                ..._detectedObjects.map(
-                                  (obj) => Container(
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.yellow.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.yellow.withOpacity(0.3),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          obj.label,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.black87,
-                                          ),
-                                        ),
-                                        Text(
-                                          "${(obj.confidence * 100).toStringAsFixed(1)}%",
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.black54,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(height: 24),
-
-                                // Text-to-Speech controls
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // TTS button
-                                    Container(
-                                      width: 60,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            Colors.blue.shade400,
-                                            Colors.blue.shade600,
-                                          ],
-                                        ),
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.blue.withOpacity(0.3),
-                                            blurRadius: 15,
-                                            spreadRadius: 2,
-                                            offset: const Offset(0, 5),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          onTap: _speakText,
-                                          borderRadius: BorderRadius.circular(
-                                            40,
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              _isSpeaking
-                                                  ? Icons.stop_rounded
-                                                  : Icons.volume_up_rounded,
-                                              size: 30,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 25),
-                                    // Language selector button
-                                    Container(
-                                      height: 60,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
-                                        borderRadius: BorderRadius.circular(30),
-                                        border: Border.all(
-                                          color: Colors.grey.shade300,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          onTap: _showLanguageMenu,
-                                          borderRadius: BorderRadius.circular(
-                                            30,
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.language,
-                                                size: 24,
-                                                color: Colors.grey[700],
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                _languageNames[_selectedLanguage]!,
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Colors.grey[800],
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Icon(
-                                                Icons.arrow_drop_down,
-                                                size: 24,
-                                                color: Colors.grey[600],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 20),
-                                Center(
-                                  child: Text(
-                                    _isSpeaking
-                                        ? 'Stop Reading'
-                                        : 'Read Objects',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
-                                ),
-                              ],
-
-                              // Add some bottom padding
-                              const SizedBox(height: 20),
-                            ],
-                          ),
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                          child: _buildDraggableContent(),
                         ),
                       ),
                     ],
@@ -1169,7 +882,313 @@ class _ObjectDetectionState extends State<ObjectDetection>
       ),
     );
   }
+
+  Widget _buildControlButton(IconData icon, VoidCallback? onPressed) {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+      ),
+      child: IconButton(
+        icon: Icon(icon, size: 24, color: Colors.white),
+        onPressed: (_isProcessing || !_isCameraInitialized) ? null : onPressed,
+      ),
+    );
+  }
+
+  Widget _buildCaptureButton() {
+    return GestureDetector(
+      onTap:
+          (_isProcessing || !_isCameraInitialized || _imageFile != null)
+              ? null
+              : _takePicture,
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 4),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Center(
+          child:
+              _isProcessing
+                  ? const CircularProgressIndicator(
+                    color: Colors.black,
+                    strokeWidth: 3,
+                  )
+                  : Container(
+                    width: 65,
+                    height: 65,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDraggableContent() {
+    if (_isProcessing && _detectedObjects.isEmpty) {
+      return const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(height: 40),
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text(
+            "Detecting Objects via Local YOLO...",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontStyle: FontStyle.italic,
+              color: Colors.black54,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_detectedObjects.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 40.0),
+        child: Center(
+          child: Text(
+            result,
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        const Text(
+          "Object Detection Result",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: SelectableText(
+            _getDetectedObjectsText(),
+            textAlign: TextAlign.left,
+            style: TextStyle(
+              fontSize: _currentFontSize,
+              fontWeight: _isTextBold ? FontWeight.bold : FontWeight.normal,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          "Detected Objects",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ..._detectedObjects.map(
+          (obj) => Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.yellow.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.yellow.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  obj.label,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                Text(
+                  "${(obj.confidence * 100).toStringAsFixed(1)}%",
+                  style: const TextStyle(fontSize: 16, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _buildTextFormattingControls(),
+        const SizedBox(height: 24),
+        _buildTtsControls(),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildTextFormattingControls() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Text Formatting",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.text_decrease),
+              onPressed: _decreaseFontSize,
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Text(
+                '${_currentFontSize.toStringAsFixed(0)}px',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.text_increase),
+              onPressed: _increaseFontSize,
+            ),
+            IconButton(
+              icon: const Icon(Icons.format_bold),
+              color: _isTextBold ? Colors.blue : Colors.grey[600],
+              onPressed: _toggleBold,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTtsControls() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            InkWell(
+              onTap: _speakText,
+              borderRadius: BorderRadius.circular(40),
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.blue.shade400, Colors.blue.shade600],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.3),
+                      blurRadius: 15,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Icon(
+                    _isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+                    size: 36,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 20),
+            InkWell(
+              onTap: _showLanguageMenu,
+              borderRadius: BorderRadius.circular(30),
+              child: Container(
+                height: 60,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.language, size: 24, color: Colors.grey[700]),
+                    const SizedBox(width: 8),
+                    Text(
+                      _languageNames[_selectedLanguage]!,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      size: 24,
+                      color: Colors.grey[600],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: Text(
+            _isSpeaking ? 'Stop Reading' : 'Read Text',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
+
+// --- Helper Classes ---
 
 class DetectedObject {
   final Rect boundingBox;
@@ -1204,27 +1223,20 @@ class ObjectDetectorPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3;
 
-    final Paint bgPaint = Paint()..color = Colors.yellow.withOpacity(0.3);
+    final Paint bgPaint = Paint()..color = Colors.yellow.withOpacity(0.8);
 
-    // Calculate offsets to center the image
-    final scaledWidth = imageSize.width * scale;
-    final scaledHeight = imageSize.height * scale;
-    final offsetX = (canvasSize.width - scaledWidth) / 2;
-    final offsetY = (canvasSize.height - scaledHeight) / 2;
+    final double offsetX = (canvasSize.width - (imageSize.width * scale)) / 2;
+    final double offsetY = (canvasSize.height - (imageSize.height * scale)) / 2;
 
     for (final obj in objects) {
-      // Scale and offset the bounding box
-      final scaledRect = Rect.fromLTRB(
+      final Rect scaledRect = Rect.fromLTRB(
         obj.boundingBox.left * scale + offsetX,
         obj.boundingBox.top * scale + offsetY,
         obj.boundingBox.right * scale + offsetX,
         obj.boundingBox.bottom * scale + offsetY,
       );
-
-      // Draw bounding box
       canvas.drawRect(scaledRect, boxPaint);
 
-      // Draw label background and text
       final textSpan = TextSpan(
         text: "${obj.label} ${(obj.confidence * 100).toStringAsFixed(1)}%",
         style: const TextStyle(
@@ -1237,26 +1249,21 @@ class ObjectDetectorPainter extends CustomPainter {
       final textPainter = TextPainter(
         text: textSpan,
         textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
+      )..layout();
+      final double textHeight = textPainter.height;
+      final double textWidth = textPainter.width;
 
-      final bgRect = Rect.fromLTWH(
+      final Rect bgRect = Rect.fromLTWH(
         scaledRect.left,
-        scaledRect.top - textPainter.height - 8,
-        textPainter.width + 12,
-        textPainter.height + 8,
+        scaledRect.top - textHeight - 8,
+        textWidth + 12,
+        textHeight + 8,
       );
-
-      final RRect roundedRect = RRect.fromRectAndRadius(
-        bgRect,
-        const Radius.circular(6),
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(bgRect, const Radius.circular(6)),
+        bgPaint,
       );
-      canvas.drawRRect(roundedRect, bgPaint);
-
-      textPainter.paint(
-        canvas,
-        Offset(scaledRect.left + 6, scaledRect.top - textPainter.height - 4),
-      );
+      textPainter.paint(canvas, Offset(bgRect.left + 6, bgRect.top + 4));
     }
   }
 
