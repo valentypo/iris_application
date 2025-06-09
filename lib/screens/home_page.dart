@@ -285,7 +285,8 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.logout, color: Colors.white),
             tooltip: 'Sign Out',
             onPressed: () async {
-              await _clearReminders(); // Clear reminders on logout
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.clear(); // Clear all saved preferences
               await FirebaseAuth.instance.signOut();
               Navigator.pushAndRemoveUntil(
                 context,

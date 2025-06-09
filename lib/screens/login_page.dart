@@ -3,6 +3,7 @@ import 'register_page.dart';
 import 'home_page.dart';
 import 'package:iris_application/services/auth_services.dart';
 import 'package:iris_application/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -173,6 +174,24 @@ class _LoginPageState extends State<LoginPage> {
                                     ],
                                   ),
                             );
+                            if (rememberMe) {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              await prefs.setBool('remember_me', true);
+                              await prefs.setString(
+                                'user_email',
+                                _emailController.text,
+                              );
+                              await prefs.setString(
+                                'username',
+                                username ?? '',
+                              ); // Save the username
+                            } else {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              await prefs.remove('remember_me');
+                              await prefs.remove('user_email');
+                            }
                           } catch (e) {
                             String errorMsg =
                                 e.toString().contains('wrong-password') ||
@@ -224,7 +243,7 @@ class _LoginPageState extends State<LoginPage> {
                             },
                           ),
                           Text(
-                            'Remember password',
+                            'Remember Me',
                             style: TextStyle(color: Color(0xFF234462)),
                           ),
                           Spacer(),

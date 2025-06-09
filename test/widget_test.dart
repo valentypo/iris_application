@@ -7,25 +7,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:iris_application/main.dart';
+import 'package:iris_application/screens/login_page.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    // await tester.pumpWidget(const MyApp());
-    await tester.pumpWidget(MyApp());
+  testWidgets('LoginPage loads smoke test', (WidgetTester tester) async {
+    // Build the LoginPage inside a MaterialApp (as in main.dart)
+    await tester.pumpWidget(MaterialApp(home: LoginPage()));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Check that the LoginPage is displayed (e.g., by finding the Login button)
+    expect(find.text('Login'), findsOneWidget);
   });
 }

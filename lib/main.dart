@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'screens/login_page.dart';
 import 'package:camera/camera.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'screens/home_page.dart';
 
 List<CameraDescription> cameras = [];
 
@@ -21,15 +23,19 @@ Future<void> main() async {
     print('Error during initialization: $e');
   }
 
-  runApp(const MyApp());
-}
+  final prefs = await SharedPreferences.getInstance();
+  final rememberMe = prefs.getBool('remember_me') ?? false;
+  final userEmail = prefs.getString('user_email');
+  final username = prefs.getString('username');
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  Widget home = LoginPage();
+  if (rememberMe && userEmail != null) {
+    // Optionally, check if FirebaseAuth.instance.currentUser != null
+    home = HomePage(email: userEmail, cameras: cameras);
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  runApp(
+    MaterialApp(
       title: 'IRIS App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -39,7 +45,14 @@ class MyApp extends StatelessWidget {
         ).copyWith(primary: Color(0xFF234462), secondary: Colors.blueAccent),
         fontFamily: 'Roboto',
       ),
-      home: LoginPage(),
-    );
-  }
+      home:
+          rememberMe && userEmail != null
+              ? HomePage(
+                email: userEmail,
+                username: username ?? 'User',
+                cameras: cameras,
+              )
+              : LoginPage(),
+    ),
+  );
 }
