@@ -159,7 +159,8 @@ class _LoginPageState extends State<LoginPage> {
                                             context,
                                             MaterialPageRoute(
                                               builder:
-                                                  (context) => HomePage(cameras: cameras,
+                                                  (context) => HomePage(
+                                                    cameras: cameras,
                                                     email:
                                                         _emailController.text,
                                                     username: username,
@@ -173,10 +174,25 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                             );
                           } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Login failed: ${e.toString()}'),
-                              ),
+                            String errorMsg =
+                                e.toString().contains('wrong-password') ||
+                                        e.toString().contains('user-not-found')
+                                    ? 'Incorrect email or password. Please try again.'
+                                    : 'Login failed: ${e.toString()}';
+                            showDialog(
+                              context: context,
+                              builder:
+                                  (context) => AlertDialog(
+                                    title: Text('Login Failed'),
+                                    content: Text(errorMsg),
+                                    actions: [
+                                      TextButton(
+                                        onPressed:
+                                            () => Navigator.of(context).pop(),
+                                        child: Text('OK'),
+                                      ),
+                                    ],
+                                  ),
                             );
                           }
                         },

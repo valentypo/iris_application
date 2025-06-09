@@ -167,7 +167,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           password: _passwordController.text,
                           username: _usernameController.text,
                         );
-                        print('Registration successful, showing dialog');
+                        // If signup succeeds, show success dialog
                         await showDialog(
                           context: context,
                           builder:
@@ -197,13 +197,25 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                         );
                       } catch (e) {
-                        print('Registration failed: $e');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Registration failed: ${e.toString()}',
-                            ),
-                          ),
+                        // Show error dialog for any error, including email already in use
+                        String errorMsg =
+                            e.toString().contains('email-already-in-use')
+                                ? 'This email is already registered. Please use another email or login.'
+                                : 'Registration failed: ${e.toString()}';
+                        await showDialog(
+                          context: context,
+                          builder:
+                              (context) => AlertDialog(
+                                title: Text('Registration Failed'),
+                                content: Text(errorMsg),
+                                actions: [
+                                  TextButton(
+                                    onPressed:
+                                        () => Navigator.of(context).pop(),
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              ),
                         );
                       }
                     },
