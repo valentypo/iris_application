@@ -276,10 +276,6 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF234462),
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {},
-        ),
         actions: [
           IconButton(
             icon: Icon(Icons.logout, color: Colors.white),
