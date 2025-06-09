@@ -31,14 +31,14 @@ class AuthServices {
         print('Error: ${e.message}');
       }
 
-      Fluttertoast.showToast(
-        msg: e.message ?? 'An error occurred during signup.',
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.SNACKBAR,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-        fontSize: 14.0,
-      );
+      // Fluttertoast.showToast(
+      //   msg: e.message ?? 'An error occurred during signup.',
+      //   toastLength: Toast.LENGTH_LONG,
+      //   gravity: ToastGravity.SNACKBAR,
+      //   backgroundColor: Colors.red,
+      //   textColor: Colors.white,
+      //   fontSize: 14.0,
+      // );
 
       throw e;
     } catch (e) {
