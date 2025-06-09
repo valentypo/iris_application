@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iris_application/services/auth_services.dart';
 import 'home_page.dart';
 import 'package:iris_application/main.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -181,9 +182,27 @@ class _RegisterPageState extends State<RegisterPage> {
                   height: 40,
                   child: ElevatedButton(
                     onPressed: () async {
-                      if (_passwordController.text != _confirmPasswordController.text) {
+                      // Validate all fields are filled
+                      if (_usernameController.text.isEmpty ||
+                          _emailController.text.isEmpty ||
+                          _passwordController.text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Passwords do not match')),
+                          SnackBar(
+                            content: Text('Please fill all fields'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Validate passwords match
+                      if (_passwordController.text !=
+                          _confirmPasswordController.text) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Passwords do not match'),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                         return;
                       }
@@ -194,49 +213,98 @@ class _RegisterPageState extends State<RegisterPage> {
                           password: _passwordController.text,
                           username: _usernameController.text,
                         );
-                        print('Registration successful, showing dialog');
 
-                        // ✅ ADD THIS
+                        // Show success dialog
                         if (!mounted) return;
-
                         await showDialog(
                           context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('Registration Successful'),
-                            content: Text('Your account has been created!'),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => HomePage(
-                                        cameras: cameras,
-                                        email: _emailController.text,
-                                        username: _usernameController.text,
+                          barrierDismissible:
+                              false, // User must click button to close
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              title: Center(
+                                child: Text('Registration Successful'),
+                              ),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline,
+                                    color: Colors.green,
+                                    size: 64,
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Your account has been created successfully!',
+                                  ),
+                                ],
+                              ),
+                              actions: [
+                                Center(
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Color(0xFF234462),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
                                       ),
                                     ),
-                                  );
-                                },
-                                child: Text('OK'),
-                              ),
-                            ],
-                          ),
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (context) => HomePage(
+                                                cameras: cameras,
+                                                email: _emailController.text,
+                                                username:
+                                                    _usernameController.text,
+                                              ),
+                                        ),
+                                      );
+                                    },
+                                    child: Text('Continue'),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         );
-                      } catch (e) {
-                        print('Registration failed: $e');
+                      } on FirebaseAuthException catch (e) {
+                        // Show only one error message with red SnackBar
+                        if (!mounted) return;
+                        String errorMessage = '';
+
+                        switch (e.code) {
+                          case 'email-already-in-use':
+                            errorMessage = 'This email is already registered';
+                            break;
+                          case 'invalid-email':
+                            errorMessage = 'Please enter a valid email address';
+                            break;
+                          case 'weak-password':
+                            errorMessage =
+                                'Password should be at least 6 characters';
+                            break;
+                          default:
+                            errorMessage = 'Registration failed: ${e.message}';
+                        }
+
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(
-                              'Registration failed: ${e.toString()}',
+                            content: Text(errorMessage),
+                            backgroundColor: Colors.red,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                         );
                       }
-                    }
-                  ,
-
+                    },
                     style: ElevatedButton.styleFrom(
                       foregroundColor: Colors.white,
                       backgroundColor: Color(0xFF234462),
