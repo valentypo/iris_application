@@ -99,10 +99,14 @@ def detect():
 
 @app.route('/health', methods=['GET'])
 def health():
+    import socket
+    hostname = socket.gethostname()
+    ip = socket.gethostbyname(hostname)
     return jsonify({
         'status': 'healthy',
         'model': 'yolo11n',
-        'version': '1.0'
+        'version': '1.0',
+        'ip': ip
     })
 
 @app.route('/', methods=['GET'])
@@ -116,10 +120,19 @@ def home():
     })
 
 if __name__ == '__main__':
+    # print("Starting Flask server...")
+    # print("Server will be available at:")
+    # print("  - http://localhost:5000")
+    # print("  - http://172.20.10.5:5000")
+    # print("\nPress CTRL+C to stop the server")
+    import socket
+    import os
+
+    hostname = socket.gethostname()
+    ip_address = socket.gethostbyname(hostname)
+    port = int(os.environ.get("PORT", 5000))  # use Railway's PORT if available
+
     print("Starting Flask server...")
-    print("Server will be available at:")
-    print("  - http://localhost:5000")
-    print("  - http://172.20.10.5:5000")
-    print("\nPress CTRL+C to stop the server")
+    print(f"Server running at: http://{ip_address}:{port}")
     
     app.run(host='0.0.0.0', port=5000, debug=True)
