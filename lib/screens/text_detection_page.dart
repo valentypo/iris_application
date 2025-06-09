@@ -7,15 +7,14 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http; // Untuk membuat permintaan HTTP
 import 'package:image/image.dart' as img;
+import 'package:flutter_tts/flutter_tts.dart'; // Add this import for TTS
 
 // Global cameras list (ensure it's initialized before use)
 List<CameraDescription> cameras = [];
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   try {
     cameras = await availableCameras();
   } on CameraException catch (e) {
@@ -37,20 +36,22 @@ class TextDetectionApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xAAA4C4F4)),
         appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xAAA4C4F4),
-            elevation: 0,
-            titleTextStyle: TextStyle(
-              color: Colors.black,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            )),
+          backgroundColor: Color(0xAAA4C4F4),
+          elevation: 0,
+          titleTextStyle: TextStyle(
+            color: Colors.black,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(elevation: 0),
         ),
       ),
-      home: cameras.isNotEmpty
-          ? CameraPage(cameras: cameras)
-          : const NoCameraPage(),
+      home:
+          cameras.isNotEmpty
+              ? CameraPage(cameras: cameras)
+              : const NoCameraPage(),
     );
   }
 }
@@ -60,12 +61,12 @@ class NoCameraPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Kesalahan Kamera")),
+      appBar: AppBar(title: const Text("Camera Error")),
       body: const Center(
         child: Padding(
           padding: EdgeInsets.all(20.0),
           child: Text(
-            "Tidak ada kamera yang terdeteksi di perangkat ini atau akses kamera ditolak. Aplikasi tidak dapat melanjutkan fungsi utama.",
+            "No camera detected...",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: Colors.redAccent),
           ),
@@ -106,7 +107,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   final List<FlashMode> _flashModes = [
     FlashMode.off,
     FlashMode.auto,
-    FlashMode.always
+    FlashMode.always,
   ]; // 'always' for ON
   int _currentFlashModeIndex = 0;
 
@@ -180,7 +181,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Failed to initialize camera: ${e.toString()}')),
+            content: Text('Failed to initialize camera: ${e.toString()}'),
+          ),
         );
       }
     }
@@ -227,21 +229,23 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
     try {
-      final XFile? pickedImage =
-          await _picker.pickImage(source: ImageSource.gallery);
+      final XFile? pickedImage = await _picker.pickImage(
+        source: ImageSource.gallery,
+      );
       if (pickedImage != null && mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (context) =>
-                  AcceptDenyPage(imagePath: pickedImage.path)),
+            builder: (context) => AcceptDenyPage(imagePath: pickedImage.path),
+          ),
         );
       }
     } catch (e) {
       print("Error opening gallery: $e");
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to open gallery: ${e.toString()}')));
+          SnackBar(content: Text('Failed to open gallery: ${e.toString()}')),
+        );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -266,13 +270,15 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (context) => AcceptDenyPage(imagePath: image.path)),
+          builder: (context) => AcceptDenyPage(imagePath: image.path),
+        ),
       );
     } catch (e) {
       print('Error taking picture: $e');
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to take picture: ${e.toString()}')));
+          SnackBar(content: Text('Failed to take picture: ${e.toString()}')),
+        );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -285,8 +291,10 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
   Future<void> _handleScaleUpdate(ScaleUpdateDetails details) async {
     if (_controller == null || !_controller!.value.isInitialized) return;
-    double newZoomLevel =
-        (_baseZoomLevel * details.scale).clamp(_minZoomLevel, _maxZoomLevel);
+    double newZoomLevel = (_baseZoomLevel * details.scale).clamp(
+      _minZoomLevel,
+      _maxZoomLevel,
+    );
     if (newZoomLevel != _currentZoomLevel) {
       await _controller!.setZoomLevel(newZoomLevel);
       if (mounted) setState(() => _currentZoomLevel = newZoomLevel);
@@ -362,7 +370,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
   Widget _buildCameraPreview(BuildContext context) {
     if (_controller == null || !_controller!.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
 
     return ClipRect(
@@ -372,7 +382,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
           fit: BoxFit.cover,
           child: SizedBox(
             width: MediaQuery.of(context).size.width,
-            height: MediaQuery.of(context).size.width * _controller!.value.aspectRatio,
+            height:
+                MediaQuery.of(context).size.width *
+                _controller!.value.aspectRatio,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -428,14 +440,19 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                   return _buildCameraPreview(context);
                 } else if (snapshot.hasError) {
                   return Center(
-                      child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                              "Error loading camera: ${snapshot.error}",
-                              style: const TextStyle(color: Colors.white),
-                              textAlign: TextAlign.center)));
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        "Error loading camera: ${snapshot.error}",
+                        style: const TextStyle(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
                 }
-                return const Center(child: CircularProgressIndicator(color: Colors.white));
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
               },
             ),
           ),
@@ -469,8 +486,11 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: Icon(_getFlashIcon(),
-                          color: Colors.white, size: 24),
+                      icon: Icon(
+                        _getFlashIcon(),
+                        color: Colors.white,
+                        size: 24,
+                      ),
                       onPressed: _isProcessing ? null : _toggleFlashMode,
                       tooltip: 'Toggle Flash',
                     ),
@@ -487,7 +507,10 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
               right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(10),
@@ -517,17 +540,30 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 2,
+                      ),
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.photo_library, size: 24, color: Colors.white),
-                      onPressed: (_isProcessing || !_isCameraInitialized) ? null : _openGallery,
+                      icon: const Icon(
+                        Icons.photo_library,
+                        size: 24,
+                        color: Colors.white,
+                      ),
+                      onPressed:
+                          (_isProcessing || !_isCameraInitialized)
+                              ? null
+                              : _openGallery,
                     ),
                   ),
                   const SizedBox(width: 50),
                   // Capture button
                   GestureDetector(
-                    onTap: (_isProcessing || !_isCameraInitialized) ? null : _takePicture,
+                    onTap:
+                        (_isProcessing || !_isCameraInitialized)
+                            ? null
+                            : _takePicture,
                     child: Container(
                       width: 80,
                       height: 80,
@@ -544,19 +580,20 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                         ],
                       ),
                       child: Center(
-                        child: _isProcessing
-                            ? const CircularProgressIndicator(
-                                color: Colors.black,
-                                strokeWidth: 3,
-                              )
-                            : Container(
-                                width: 65,
-                                height: 65,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
+                        child:
+                            _isProcessing
+                                ? const CircularProgressIndicator(
+                                  color: Colors.black,
+                                  strokeWidth: 3,
+                                )
+                                : Container(
+                                  width: 65,
+                                  height: 65,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
-                              ),
                       ),
                     ),
                   ),
@@ -568,16 +605,24 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 2,
+                      ),
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.flip_camera_ios_outlined, size: 24, color: Colors.white),
-                      onPressed: (_isProcessing ||
-                              !_isCameraInitialized ||
-                              _frontCamera == null ||
-                              _backCamera == null)
-                          ? null
-                          : _flipCamera,
+                      icon: const Icon(
+                        Icons.flip_camera_ios_outlined,
+                        size: 24,
+                        color: Colors.white,
+                      ),
+                      onPressed:
+                          (_isProcessing ||
+                                  !_isCameraInitialized ||
+                                  _frontCamera == null ||
+                                  _backCamera == null)
+                              ? null
+                              : _flipCamera,
                     ),
                   ),
                 ],
@@ -612,7 +657,8 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
   static const double _fontSizeStep = 1.0;
 
   // Draggable sheet state
-  DraggableScrollableController _dragController = DraggableScrollableController();
+  DraggableScrollableController _dragController =
+      DraggableScrollableController();
   double _initialChildSize = 0.4;
   double _minChildSize = 0.1;
   double _maxChildSize = 1.0;
@@ -620,32 +666,84 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
 
   final String _googleApiKey = "AIzaSyCZYjhnCmIZ53Z6zIzNTHEPz-AVO8R7He4";
 
+  // TTS variables
+  late FlutterTts _flutterTts;
+  bool _isSpeaking = false;
+  String _detectedLanguage = 'en';
+  String _selectedLanguage = 'auto'; // 'auto', 'en', or 'id'
+  Map<String, String> _languageNames = {
+    'auto': 'Auto',
+    'en': 'English',
+    'id': 'Bahasa',
+  };
+
   @override
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _imageFile = File(widget.imagePath);
+    _initializeTts();
     _processImageWithGoogleVision(widget.imagePath);
+  }
+
+  void _initializeTts() {
+    _flutterTts = FlutterTts();
+
+    // Configure TTS
+    _flutterTts.setStartHandler(() {
+      setState(() {
+        _isSpeaking = true;
+      });
+    });
+
+    _flutterTts.setCompletionHandler(() {
+      setState(() {
+        _isSpeaking = false;
+      });
+    });
+
+    _flutterTts.setCancelHandler(() {
+      setState(() {
+        _isSpeaking = false;
+      });
+    });
+
+    _flutterTts.setErrorHandler((msg) {
+      setState(() {
+        _isSpeaking = false;
+      });
+      print("TTS Error: $msg");
+    });
+
+    // Set default properties
+    _flutterTts.setPitch(1.0);
+    _flutterTts.setSpeechRate(0.5);
+    _flutterTts.setVolume(1.0);
   }
 
   @override
   void dispose() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _dragController.dispose();
+    _flutterTts.stop();
     super.dispose();
   }
 
   void _increaseFontSize() {
     setState(() {
-      _currentFontSize =
-          (_currentFontSize + _fontSizeStep).clamp(_minFontSize, _maxFontSize);
+      _currentFontSize = (_currentFontSize + _fontSizeStep).clamp(
+        _minFontSize,
+        _maxFontSize,
+      );
     });
   }
 
   void _decreaseFontSize() {
     setState(() {
-      _currentFontSize =
-          (_currentFontSize - _fontSizeStep).clamp(_minFontSize, _maxFontSize);
+      _currentFontSize = (_currentFontSize - _fontSizeStep).clamp(
+        _minFontSize,
+        _maxFontSize,
+      );
     });
   }
 
@@ -666,11 +764,122 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
       _ocrResult = 'Processing...';
       _isLoading = true;
       _showDraggable = false;
+      _isSpeaking = false;
     });
+    _flutterTts.stop();
     _dragController.animateTo(
       _minChildSize,
       duration: Duration(milliseconds: 300),
       curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _speakText() async {
+    if (_ocrResult.isEmpty ||
+        _ocrResult == 'Processing...' ||
+        _ocrResult.startsWith('Error') ||
+        _ocrResult.startsWith('ERROR') ||
+        _ocrResult.contains('No text detected')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No valid text to speak'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_isSpeaking) {
+      await _flutterTts.stop();
+      setState(() {
+        _isSpeaking = false;
+      });
+    } else {
+      // Determine which language to use
+      String languageToUse =
+          _selectedLanguage == 'auto'
+              ? _detectedLanguage
+              : (_selectedLanguage == 'id' ? 'id-ID' : 'en-US');
+
+      // Set language based on user selection or detected language
+      await _flutterTts.setLanguage(languageToUse);
+
+      // Speak the text
+      var result = await _flutterTts.speak(_ocrResult);
+      if (result == 1) {
+        setState(() {
+          _isSpeaking = true;
+        });
+      }
+    }
+  }
+
+  void _showLanguageMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Select Language',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ..._languageNames.entries.map((entry) {
+                bool isSelected = _selectedLanguage == entry.key;
+                return ListTile(
+                  leading: Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: isSelected ? Colors.blue : Colors.grey,
+                  ),
+                  title: Text(
+                    entry.value,
+                    style: TextStyle(
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Colors.blue : Colors.black,
+                    ),
+                  ),
+                  subtitle:
+                      entry.key == 'auto'
+                          ? Text(
+                            'Detected: ${_detectedLanguage == 'id' ? 'Bahasa Indonesia' : 'English'}',
+                            style: const TextStyle(fontSize: 12),
+                          )
+                          : null,
+                  onTap: () {
+                    setState(() {
+                      _selectedLanguage = entry.key;
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -683,10 +892,12 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
       _showDraggable = true;
     });
 
-    if (_googleApiKey == "YOUR_GOOGLE_CLOUD_VISION_API_KEY" || _googleApiKey.isEmpty) {
+    if (_googleApiKey == "YOUR_GOOGLE_CLOUD_VISION_API_KEY" ||
+        _googleApiKey.isEmpty) {
       if (mounted) {
         setState(() {
-          _ocrResult = "ERROR: Google Cloud Vision API Key is not set in the code.";
+          _ocrResult =
+              "ERROR: Google Cloud Vision API Key is not set in the code.";
           _isLoading = false;
         });
       }
@@ -707,7 +918,10 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
       // Get image dimensions
       final imageBytes = await File(imagePath).readAsBytes();
       final decodedImage = await decodeImageFromList(imageBytes);
-      _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+      _imageSize = Size(
+        decodedImage.width.toDouble(),
+        decodedImage.height.toDouble(),
+      );
 
       final File imageFile = File(imagePath);
       if (!await imageFile.exists()) {
@@ -734,20 +948,23 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
         base64Image = base64Encode(processedImageBytes);
         print("Preprocessing complete. Image encoded to base64.");
       } else {
-        print("Warning: Could not decode image for preprocessing. Using original image bytes.");
+        print(
+          "Warning: Could not decode image for preprocessing. Using original image bytes.",
+        );
         base64Image = base64Encode(imageFileBytes);
       }
 
-      String visionApiUrl = 'https://vision.googleapis.com/v1/images:annotate?key=$_googleApiKey';
+      String visionApiUrl =
+          'https://vision.googleapis.com/v1/images:annotate?key=$_googleApiKey';
       Map<String, dynamic> requestPayload = {
         'requests': [
           {
             'image': {'content': base64Image},
             'features': [
-              {'type': 'TEXT_DETECTION'}
+              {'type': 'TEXT_DETECTION'},
             ],
-          }
-        ]
+          },
+        ],
       };
 
       print("Sending request to Google Vision API...");
@@ -759,7 +976,9 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
           )
           .timeout(const Duration(seconds: 60));
 
-      print("Received response from Google Vision API. Status: ${response.statusCode}");
+      print(
+        "Received response from Google Vision API. Status: ${response.statusCode}",
+      );
 
       if (!mounted) return;
 
@@ -773,12 +992,21 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
             var firstResponse = decodedResponse['responses'][0];
             if (firstResponse['error'] != null &&
                 firstResponse['error']['message'] != null) {
-              _ocrResult = "Google API Error: ${firstResponse['error']['message']}";
+              _ocrResult =
+                  "Google API Error: ${firstResponse['error']['message']}";
             } else if (firstResponse['textAnnotations'] != null &&
                 firstResponse['textAnnotations'].isNotEmpty) {
-              _ocrResult = firstResponse['textAnnotations'][0]['description']?.trim() ?? "No text description found.";
-              if (_ocrResult.isEmpty) _ocrResult = "No text detected in image (empty description).";
-              
+              _ocrResult =
+                  firstResponse['textAnnotations'][0]['description']?.trim() ??
+                  "No text description found.";
+
+              // Get detected language
+              _detectedLanguage =
+                  firstResponse['textAnnotations'][0]['locale'] ?? 'en';
+
+              if (_ocrResult.isEmpty)
+                _ocrResult = "No text detected in image (empty description).";
+
               // Expand the sheet when text is detected
               _dragController.animateTo(
                 0.5,
@@ -789,10 +1017,12 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
               _ocrResult = "No text detected in image (no textAnnotations).";
             }
           } else {
-            _ocrResult = "Invalid response structure from Google API. Raw: ${response.body.substring(0, (response.body.length > 200 ? 200 : response.body.length))}";
+            _ocrResult =
+                "Invalid response structure from Google API. Raw: ${response.body.substring(0, (response.body.length > 200 ? 200 : response.body.length))}";
           }
         } else {
-          _ocrResult = "Error calling Google API: HTTP ${response.statusCode}\nResponse: ${response.body.substring(0, (response.body.length > 300 ? 300 : response.body.length))}";
+          _ocrResult =
+              "Error calling Google API: HTTP ${response.statusCode}\nResponse: ${response.body.substring(0, (response.body.length > 300 ? 300 : response.body.length))}";
         }
       });
     } on TimeoutException catch (e) {
@@ -800,14 +1030,16 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _ocrResult = "Request to Google Vision API timed out. Please check your internet connection and try again.";
+        _ocrResult =
+            "Request to Google Vision API timed out. Please check your internet connection and try again.";
       });
     } on SocketException catch (e) {
       print("Socket/Network Error: $e");
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _ocrResult = "Network error: Could not connect to Google Vision API. Please check your internet connection.";
+        _ocrResult =
+            "Network error: Could not connect to Google Vision API. Please check your internet connection.";
       });
     } catch (e) {
       print("Unexpected Error in _processImageWithGoogleVision: $e");
@@ -827,19 +1059,18 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
         children: [
           // Full screen image
           Positioned.fill(
-            child: _imageFile != null
-                ? AspectRatio(
-                    aspectRatio: _imageSize != null 
-                        ? _imageSize!.width / _imageSize!.height 
-                        : 1.0,
-                    child: Image.file(
-                      _imageFile!,
-                      fit: BoxFit.contain,
+            child:
+                _imageFile != null
+                    ? AspectRatio(
+                      aspectRatio:
+                          _imageSize != null
+                              ? _imageSize!.width / _imageSize!.height
+                              : 1.0,
+                      child: Image.file(_imageFile!, fit: BoxFit.contain),
+                    )
+                    : const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
                     ),
-                  )
-                : const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
           ),
 
           // Top controls - Back button
@@ -869,7 +1100,11 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.refresh, size: 24, color: Colors.white),
+                      icon: const Icon(
+                        Icons.refresh,
+                        size: 24,
+                        color: Colors.white,
+                      ),
                       onPressed: _resetDetection,
                     ),
                   ),
@@ -929,7 +1164,7 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              
+
                               // Text result container
                               Container(
                                 width: double.infinity,
@@ -937,39 +1172,44 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade50,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.grey.shade300),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                  ),
                                 ),
-                                child: _isLoading
-                                    ? const Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          CircularProgressIndicator(),
-                                          SizedBox(height: 16),
-                                          Text(
-                                            "Detecting Text via Google Vision...",
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontStyle: FontStyle.italic,
-                                              color: Colors.black54,
+                                child:
+                                    _isLoading
+                                        ? const Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            CircularProgressIndicator(),
+                                            SizedBox(height: 16),
+                                            Text(
+                                              "Detecting Text via Google Vision...",
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontStyle: FontStyle.italic,
+                                                color: Colors.black54,
+                                              ),
                                             ),
+                                          ],
+                                        )
+                                        : SelectableText(
+                                          _ocrResult,
+                                          textAlign: TextAlign.left,
+                                          style: TextStyle(
+                                            fontSize: _currentFontSize,
+                                            fontWeight:
+                                                _isTextBold
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                            color: Colors.black87,
                                           ),
-                                        ],
-                                      )
-                                    : SelectableText(
-                                        _ocrResult,
-                                        textAlign: TextAlign.left,
-                                        style: TextStyle(
-                                          fontSize: _currentFontSize,
-                                          fontWeight: _isTextBold
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                          color: Colors.black87,
                                         ),
-                                      ),
                               ),
-                              
+
                               const SizedBox(height: 20),
-                              
+
                               // Text formatting controls
                               if (!_isLoading) ...[
                                 const Text(
@@ -980,9 +1220,10 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                                     color: Colors.black87,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 20),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
                                     // Decrease font size
                                     Container(
@@ -999,11 +1240,16 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                                     ),
                                     // Font size indicator
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.blue.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                                        border: Border.all(
+                                          color: Colors.blue.withOpacity(0.3),
+                                        ),
                                       ),
                                       child: Text(
                                         '${_currentFontSize.toStringAsFixed(0)}px',
@@ -1030,25 +1276,138 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                                     // Bold toggle
                                     Container(
                                       decoration: BoxDecoration(
-                                        color: _isTextBold 
-                                            ? Colors.blue.withOpacity(0.2)
-                                            : Colors.grey.shade200,
+                                        color:
+                                            _isTextBold
+                                                ? Colors.blue.withOpacity(0.2)
+                                                : Colors.grey.shade200,
                                         shape: BoxShape.circle,
                                       ),
                                       child: IconButton(
                                         icon: const Icon(Icons.format_bold),
                                         iconSize: 24,
-                                        color: _isTextBold
-                                            ? Colors.blue
-                                            : Colors.grey[600],
+                                        color:
+                                            _isTextBold
+                                                ? Colors.blue
+                                                : Colors.grey[600],
                                         onPressed: _toggleBold,
                                         tooltip: 'Toggle Bold',
                                       ),
                                     ),
                                   ],
                                 ),
+
+                                const SizedBox(height: 24),
+
+                                // Text-to-Speech controls
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // TTS button
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Colors.blue.shade400,
+                                            Colors.blue.shade600,
+                                          ],
+                                        ),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.blue.withOpacity(0.3),
+                                            blurRadius: 15,
+                                            spreadRadius: 2,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: _speakText,
+                                          borderRadius: BorderRadius.circular(
+                                            40,
+                                          ),
+                                          child: Center(
+                                            child: Icon(
+                                              _isSpeaking
+                                                  ? Icons.stop_rounded
+                                                  : Icons.volume_up_rounded,
+                                              size: 29,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    // Language selector button
+                                    Container(
+                                      height: 50,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(30),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: _showLanguageMenu,
+                                          borderRadius: BorderRadius.circular(
+                                            30,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.language,
+                                                size: 24,
+                                                color: Colors.grey[700],
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _languageNames[_selectedLanguage]!,
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.grey[800],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Icon(
+                                                Icons.arrow_drop_down,
+                                                size: 24,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                Center(
+                                  child: Text(
+                                    _isSpeaking ? 'Stop Reading' : 'Read Text',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ),
                               ],
-                              
+
                               // Add some bottom padding
                               const SizedBox(height: 20),
                             ],

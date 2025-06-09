@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "C:/Users/Steven/OneDrive/Desktop/iris_application/windows/runner"
+    "cmake.sourceDirectory": "C:/Users/Steven/OneDrive/Desktop/iris_application/windows/runner",
+    "cmake.ignoreCMakeListsMissing": true
 }
