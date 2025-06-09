@@ -8,17 +8,19 @@ List<CameraDescription> cameras = [];
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     // Initialize Firebase
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
     // Initialize cameras
     cameras = await availableCameras();
   } catch (e) {
     print('Error during initialization: $e');
   }
-  
+
   runApp(const MyApp());
 }
 
