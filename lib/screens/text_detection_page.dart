@@ -61,12 +61,12 @@ class NoCameraPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Camera Error")),
+      appBar: AppBar(title: const Text("Kesalahan Kamera")),
       body: const Center(
         child: Padding(
           padding: EdgeInsets.all(20.0),
           child: Text(
-            "No camera detected...",
+            "Tidak ada kamera yang terdeteksi di perangkat ini atau akses kamera ditolak. Aplikasi tidak dapat melanjutkan fungsi utama.",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: Colors.redAccent),
           ),
@@ -1321,7 +1321,7 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                                             color: Colors.blue.withOpacity(0.3),
                                             blurRadius: 15,
                                             spreadRadius: 2,
-                                            offset: const Offset(0, 3),
+                                            offset: const Offset(0, 5),
                                           ),
                                         ],
                                       ),
@@ -1337,17 +1337,17 @@ class _AcceptDenyPageState extends State<AcceptDenyPage> {
                                               _isSpeaking
                                                   ? Icons.stop_rounded
                                                   : Icons.volume_up_rounded,
-                                              size: 29,
+                                              size: 30,
                                               color: Colors.white,
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 20),
+                                    const SizedBox(width: 25),
                                     // Language selector button
                                     Container(
-                                      height: 50,
+                                      height: 60,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 16,
                                       ),
