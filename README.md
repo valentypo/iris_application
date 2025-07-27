@@ -10,6 +10,12 @@ IRIS is a mobile application built using Flutter, designed to assist elderly and
 
 ---
 
+Documentations
+![Alt text](iris_application/assets/readme/object-recognition.png)
+![Alt text](iris_application/assets/readme/text-detection.png)
+![Alt text](iris_application/assets/readme/text-to-speech.png)
+
+
 🎯 Key Features
 
 - Object Detection using YOLOv11 (Ultralytics)
